@@ -57,8 +57,11 @@ class RedisService {
 
     async getSyncCode(code: string): Promise<string | null> {
         try {
+            console.log(`Getting sync code for ${code}`);
             await this.ensureConnection();
-            return await this.redis.get(`discord-sync-codes:codes:${code}`);
+            const result = await this.redis.get(`discord-sync-codes:codes:${code}`);
+            console.log(`Sync code found for ${code}: ${result}`);
+            return result;
         } catch (error) {
             console.error('Error getting sync code:', error);
             return null;
@@ -67,9 +70,11 @@ class RedisService {
 
     async storeSyncCode(code: string, uuid: string): Promise<void> {
         try {
+            console.log(`Storing sync code for ${code} and ${uuid}`);
             await this.ensureConnection();
             await this.redis.set(`discord-sync-codes:codes:${code}`, uuid);
             await this.redis.set(`discord-sync-codes:accounts:${uuid}`, code);
+            console.log(`Sync code stored for ${code} and ${uuid}`);
         } catch (error) {
             console.error('Error storing sync code:', error);
             throw error;
@@ -78,9 +83,11 @@ class RedisService {
 
     async deleteSyncCode(code: string, uuid: string): Promise<void> {
         try {
+            console.log(`Deleting sync code for ${code} and ${uuid}`);
             await this.ensureConnection();
             await this.redis.del(`discord-sync-codes:codes:${code}`);
             await this.redis.del(`discord-sync-codes:accounts:${uuid}`);
+            console.log(`Sync code deleted for ${code} and ${uuid}`);
         } catch (error) {
             console.error('Error deleting sync code:', error);
             throw error;
@@ -89,8 +96,10 @@ class RedisService {
 
     async getProfile(uuid: string): Promise<DiscordProfile | null> {
         try {
+            console.log(`Getting profile for ${uuid}`);
             await this.ensureConnection();
             const profile = await this.redis.get(`discord-profiles:${uuid}`);
+            console.log(`Profile found for ${uuid}: ${profile}`);
             return profile ? JSON.parse(profile) : null;
         } catch (error) {
             console.error('Error getting profile:', error);
@@ -100,11 +109,13 @@ class RedisService {
 
     async saveProfile(profile: DiscordProfile): Promise<void> {
         try {
+            console.log(`Saving profile for ${profile.identifier}`);
             await this.ensureConnection();
             await this.redis.set(
                 `discord-profiles:${profile.identifier}`, 
                 JSON.stringify(profile)
             );
+            console.log(`Profile saved for ${profile.identifier}`);
         } catch (error) {
             console.error('Error saving profile:', error);
             throw error;
@@ -113,8 +124,10 @@ class RedisService {
 
     async publish(channel: string, message: string): Promise<void> {
         try {
+            console.log(`Publishing message to ${channel}: ${message}`);
             await this.ensureConnection();
             await this.redis.publish(channel, message);
+            console.log(`Published message to ${channel}: ${message}`);
         } catch (error) {
             console.error('Error publishing message:', error);
             throw error;

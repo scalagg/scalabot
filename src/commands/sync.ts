@@ -11,8 +11,19 @@ import {
 } from 'discord.js';
 import type { InteractionReplyOptions } from 'discord.js';
 import { redisService } from '../services/RedisService';
+import { mongoService } from '../services/MongoService';
 import { config } from '../config/config';
 import axios from 'axios';
+
+interface DiscordProfile {
+    _id: string;
+    claimedInitialLinkAward: boolean;
+    completedInitialSave: boolean | null;
+    discordId: string | null;
+    identifier: string;
+    lastCachedDiscordUsername: string | null;
+    notifiedOfSuccessfulLink: boolean;
+}
 
 export const data = new SlashCommandBuilder()
     .setName('sync')
@@ -48,89 +59,70 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
         if (!uuid) {
             const response: InteractionReplyOptions = {
                 content: 'Invalid sync code. Please make sure you entered the correct code.',
-                flags: 1 << 6 // Using flags for ephemeral
+                flags: 1 << 6
             };
             await interaction.reply(response);
             return;
         }
 
-        try {
-            // Get Minecraft username from API
-            const response = await axios.get(`${config.apiBaseUrl}/profile/${uuid}`, {
-                headers: {
-                    'Authorization': `${config.apiKey}`,
-                    'Accept': 'application/json'
-                },
-                validateStatus: null // Allow any status code
-            });
+        // Connect to MongoDB and get profiles collection
+        await mongoService.connect();
+        const profiles = mongoService.getCollection<DiscordProfile>('DiscordProfile');
 
-            if (response.status === 401) {
-                console.error('API Authentication failed. Please check your API key.');
-                const errorResponse: InteractionReplyOptions = {
-                    content: 'Unable to verify Minecraft account at this time. Please try again later or contact an administrator.',
-                    flags: 1 << 6
-                };
-                await interaction.reply(errorResponse);
-                return;
-            }
-
-            if (response.status !== 200) {
-                console.error(`API request failed with status ${response.status}:`, response.data);
-                const errorResponse: InteractionReplyOptions = {
-                    content: 'Failed to fetch Minecraft account information. Please try again later.',
-                    flags: 1 << 6
-                };
-                await interaction.reply(errorResponse);
-                return;
-            }
-
-            const minecraftUsername = response.data.name;
-
-            const profile = await redisService.getProfile(uuid) || {
+        // Get or create profile from MongoDB
+        let profile = await profiles.findOne({ identifier: uuid });
+        if (!profile) {
+            profile = {
+                _id: uuid,
+                claimedInitialLinkAward: false,
+                completedInitialSave: false,
+                discordId: null,
                 identifier: uuid,
-                notifiedOfSuccessfulLink: false,
-                claimedInitialLinkAward: false
+                lastCachedDiscordUsername: null,
+                notifiedOfSuccessfulLink: false
             };
-
-            profile.discordId = interaction.user.id;
-            profile.lastCachedDiscordUsername = interaction.user.username;
-
-            await redisService.saveProfile(profile);
-            await redisService.deleteSyncCode(code, uuid);
-
-            // Publish account link notification using Aware message format
-            await redisService.publish('discord:linked', JSON.stringify({
-                type: 'linked',
-                data: {
-                    'player-uuid': uuid
-                }
-            }));
-
-            if (interaction.guild && interaction.member instanceof GuildMember) {
-                const verifiedRole = interaction.guild.roles.cache.find(
-                    role => role.name === '✓ Account Linked'
-                );
-                
-                if (verifiedRole) {
-                    await interaction.member.roles.add(verifiedRole);
-                    await interaction.member.setNickname(minecraftUsername);
-                }
-            }
-
-            const successResponse: InteractionReplyOptions = {
-                content: `Successfully linked your Discord account to your Minecraft account: \`${minecraftUsername}\`!`,
-                flags: 1 << 6
-            };
-            await interaction.reply(successResponse);
-
-        } catch (apiError) {
-            console.error('API request error:', apiError);
-            const errorResponse: InteractionReplyOptions = {
-                content: 'Failed to communicate with the Minecraft server. Please try again later.',
-                flags: 1 << 6
-            };
-            await interaction.reply(errorResponse);
         }
+
+        // Update profile
+        profile.discordId = interaction.user.id;
+        profile.lastCachedDiscordUsername = interaction.user.username;
+
+        // Save to MongoDB
+        await profiles.updateOne(
+            { identifier: uuid },
+            { $set: profile },
+            { upsert: true }
+        );
+
+        // Clean up sync code
+        await redisService.deleteSyncCode(code, uuid);
+
+        // Publish account link notification using Aware message format
+        await redisService.publish('aware', JSON.stringify({
+            packetId: 'linked',
+            type: 'linked',
+            data: {
+                'player-uuid': uuid
+            }
+        }));
+
+        if (interaction.guild && interaction.member instanceof GuildMember) {
+            const verifiedRole = interaction.guild.roles.cache.find(
+                role => role.name === 'Member'
+            );
+            
+            if (verifiedRole) {
+                await interaction.member.roles.add(verifiedRole);
+                await interaction.member.setNickname(profile.lastCachedDiscordUsername);
+            }
+        }
+
+        const successResponse: InteractionReplyOptions = {
+            content: `Successfully linked your Discord account to your Minecraft account: \`${profile.lastCachedDiscordUsername}\`!`,
+            flags: 1 << 6
+        };
+        await interaction.reply(successResponse);
+
     } catch (error) {
         console.error('Error handling sync modal:', error);
         const errorResponse: InteractionReplyOptions = {
