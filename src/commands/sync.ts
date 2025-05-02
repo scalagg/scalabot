@@ -98,13 +98,30 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
         await redisService.deleteSyncCode(code, uuid);
 
         // Publish account link notification using Aware message format
-        await redisService.publish('aware', JSON.stringify({
+        const awareMessage = {
             packetId: 'linked',
             type: 'linked',
             data: {
                 'player-uuid': uuid
             }
-        }));
+        };
+        
+        console.log('[DiscordBot] [DEBUG] Starting sync process for user:', interaction.user.tag);
+        console.log('[DiscordBot] [DEBUG] UUID:', uuid);
+        console.log('[DiscordBot] [DEBUG] Discord ID:', interaction.user.id);
+        console.log('[DiscordBot] [DEBUG] Discord Username:', interaction.user.username);
+        console.log('[DiscordBot] [DEBUG] Profile before update:', JSON.stringify(profile, null, 2));
+        
+        console.log('[DiscordBot] [DEBUG] Publishing Aware message:', JSON.stringify(awareMessage, null, 2));
+        console.log('[DiscordBot] [DEBUG] Channel: discord');
+        
+        try {
+            await redisService.publish('discord', JSON.stringify(awareMessage));
+            console.log('[DiscordBot] [DEBUG] Message published successfully');
+        } catch (error) {
+            console.error('[DiscordBot] [ERROR] Failed to publish message:', error);
+            throw error;
+        }
 
         if (interaction.guild && interaction.member instanceof GuildMember) {
             const verifiedRole = interaction.guild.roles.cache.find(
