@@ -202,12 +202,14 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
 
         // Update profile
         profile.discordId = interaction.user.id;
-        profile.lastCachedDiscordUsername = minecraftUsername; // Use Minecraft username
+        profile.lastCachedDiscordUsername = minecraftUsername;
+        profile.notifiedOfSuccessfulLink = true; // Set to true since we're notifying now
 
         console.log('[DiscordBot] [DEBUG] Updating profile in MongoDB:', {
             uuid,
             discordId: interaction.user.id,
-            minecraftUsername: minecraftUsername
+            minecraftUsername: minecraftUsername,
+            notifiedOfSuccessfulLink: true
         });
 
         // Save to MongoDB
@@ -225,7 +227,9 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
             packetId: 'linked',
             type: 'linked',
             data: {
-                'player-uuid': uuid
+                'player-uuid': uuid,
+                'discord-username': interaction.user.tag,
+                'minecraft-username': minecraftUsername
             }
         };
         
@@ -248,7 +252,7 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
             if (verifiedRole) {
                 console.log('[DiscordBot] [DEBUG] Adding verified role to user:', interaction.user.tag);
                 await interaction.member.roles.add(verifiedRole);
-                await interaction.member.setNickname(minecraftUsername); // Use Minecraft username
+                await interaction.member.setNickname(minecraftUsername);
             }
         }
 
