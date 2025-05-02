@@ -41,7 +41,7 @@ client.on('guildMemberAdd', async (member) => {
 
 // Handle command interactions
 client.on('interactionCreate', async (interaction: Interaction) => {
-  if (!interaction.isCommand() && !interaction.isModalSubmit()) return;
+  if (!interaction.isCommand() && !interaction.isModalSubmit() && !interaction.isButton()) return;
 
   try {
     if (interaction.isCommand()) {
@@ -50,18 +50,25 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
       await command.execute(interaction);
     } else if (interaction.isModalSubmit()) {
-      if (interaction.customId === 'sync-modal') {
-        const syncCommand = commandLoader.getCommand('sync');
-        if (!syncCommand) return;
+      if (interaction.customId === 'verify-modal') {
+        const deployVerifyCommand = commandLoader.getCommand('deployverify');
+        if (!deployVerifyCommand) return;
 
-        await syncCommand.handleModal(interaction);
+        await deployVerifyCommand.handleModal(interaction);
+      }
+    } else if (interaction.isButton()) {
+      if (interaction.customId === 'verify-button') {
+        const deployVerifyCommand = commandLoader.getCommand('deployverify');
+        if (!deployVerifyCommand) return;
+
+        await deployVerifyCommand.handleButton(interaction);
       }
     }
   } catch (error) {
     console.error('Error executing command:', error);
     const reply = {
       content: 'There was an error while executing this command!',
-      ephemeral: true
+      flags: 1 << 6
     };
 
     if (interaction.replied || interaction.deferred) {
