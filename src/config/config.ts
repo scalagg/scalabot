@@ -12,6 +12,7 @@ interface BotConfig {
   redisHost: string;
   redisPort: number;
   redisPassword: string;
+  testGuildId?: string; // Optional test guild ID for development
   welcomeImage?: {
     backgroundPath?: string;
     guildName?: string;
@@ -101,6 +102,10 @@ class Config {
     return this.config.redisPassword;
   }
 
+  public get testGuildId(): string | undefined {
+    return this.config.testGuildId;
+  }
+
   public get welcomeImageConfig() {
     return this.config.welcomeImage || {};
   }
@@ -117,5 +122,6 @@ export const config = {
   get redisHost() { return Config.getInstance().redisHost; },
   get redisPort() { return Config.getInstance().redisPort; },
   get redisPassword() { return Config.getInstance().redisPassword; },
+  get testGuildId() { return Config.getInstance().testGuildId; },
   get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; }
 } as const; 

@@ -1,129 +1,185 @@
-import { Client, GatewayIntentBits, TextChannel } from 'discord.js';
-import type { Interaction } from 'discord.js';
-import { WelcomeCanvas } from './libs/welcomeCanvas';
+import { 
+    Client, 
+    GatewayIntentBits, 
+    Events, 
+    EmbedBuilder,
+    ButtonInteraction,
+    ModalSubmitInteraction,
+    StringSelectMenuInteraction,
+    TextChannel
+} from 'discord.js';
+import type { 
+    Interaction,
+    ChatInputCommandInteraction
+} from 'discord.js';
 import { config } from './config/config';
 import { CommandLoaderService } from './services/CommandLoaderService';
-import { redisService } from './services/RedisService';
+import { handleTicketButton } from './handlers/TicketButtonHandler';
+import { handleModal as handleTicketModal } from './handlers/TicketModalHandler';
+import { 
+    handleTicketManagement, 
+    handleUserManagement, 
+    handleUserSelect, 
+    handleCloseConfirmation,
+    handleRating 
+} from './handlers/TicketManagementHandler';
+import { mongoService } from './services/MongoService';
+import { ticketService } from './services/TicketService';
+import { generateTranscript, closeTicket } from './utils/ticketUtils';
 
 // Create Discord client
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ]
 });
-
-// Get WelcomeCanvas instance
-const welcomeCanvas = WelcomeCanvas.getInstance();
 
 // Initialize command loader
 const commandLoader = new CommandLoaderService(client);
 
-// Handle guild member join
-client.on('guildMemberAdd', async (member) => {
-  try {
-    const welcomeChannel = member.guild.channels.cache.get(config.welcomeChannelId) as TextChannel;
-    if (!welcomeChannel) return;
+// Initialize ticket service with client
+ticketService.setClient(client);
 
-    // Create welcome image with config settings
-    const welcomeImage = await welcomeCanvas.createCustomWelcomeImage(member, config.welcomeImageConfig);
-
-    await welcomeChannel.send({
-      content: `Welcome ${member} to the server!`,
-      files: [{ attachment: welcomeImage, name: 'welcome.png' }]
-    });
-  } catch (error) {
-    console.error('Error handling welcome message:', error);
-  }
-});
-
-// Handle command interactions
-client.on('interactionCreate', async (interaction: Interaction) => {
-  if (!interaction.isCommand() && !interaction.isModalSubmit() && !interaction.isButton()) return;
-
-  try {
-    if (interaction.isCommand()) {
-      const command = commandLoader.getCommand(interaction.commandName);
-      if (!command) return;
-
-      await command.execute(interaction);
-    } else if (interaction.isModalSubmit()) {
-      if (interaction.customId === 'verify-modal') {
-        const deployVerifyCommand = commandLoader.getCommand('deployverify');
-        if (!deployVerifyCommand) return;
-
-        await deployVerifyCommand.handleModal(interaction);
-      }
-    } else if (interaction.isButton()) {
-      if (interaction.customId === 'verify-button') {
-        const deployVerifyCommand = commandLoader.getCommand('deployverify');
-        if (!deployVerifyCommand) return;
-
-        await deployVerifyCommand.handleButton(interaction);
-      }
-    }
-  } catch (error) {
-    console.error('Error executing command:', error);
-    const reply = {
-      content: 'There was an error while executing this command!',
-      flags: 1 << 6
-    };
-
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(reply);
-    } else {
-      await interaction.reply(reply);
-    }
-  }
-});
+// Track initialization status
+let isInitialized = false;
 
 // Handle ready event
-client.once('ready', () => {
-  console.log(`Logged in as ${client.user?.tag}`);
+client.once(Events.ClientReady, async (readyClient) => {
+    console.log(`Logged in as ${readyClient.user.tag}!`);
+
+    try {
+        // Initialize services in sequence
+        console.log('Initializing services...');
+        
+        // 1. Connect to MongoDB first
+        await mongoService.connect();
+        console.log('Connected to MongoDB');
+
+        // 2. Initialize ticket service
+        await ticketService.initialize();
+        console.log('Ticket service initialized');
+
+        // 3. Initialize commands last
+        await commandLoader.initialize();
+        console.log('Commands initialized');
+
+        // Mark as initialized
+        isInitialized = true;
+        console.log('All services initialized successfully');
+    } catch (error) {
+        console.error('Error during initialization:', error);
+        process.exit(1); // Exit if initialization fails
+    }
 });
 
-// Initialize commands and login
-async function start() {
-  try {
-    await commandLoader.initialize();
-    await client.login(config.token);
-  } catch (error) {
-    console.error('Error starting bot:', error);
-    process.exit(1);
-  }
-}
+// Handle interactions
+client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+    try {
+        // Check if services are initialized
+        if (!isInitialized) {
+            if (interaction.isRepliable()) {
+                await interaction.reply({
+                    content: '❌ Bot is still initializing. Please try again in a moment.',
+                    ephemeral: true
+                });
+            }
+            return;
+        }
 
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Shutting down...');
-  await Promise.all([
-    client.destroy(),
-    redisService.quit()
-  ]);
-  process.exit(0);
+        if (interaction.isCommand()) {
+            const command = commandLoader.getCommand(interaction.commandName);
+            if (!command) {
+                console.error(`Command ${interaction.commandName} not found`);
+                return;
+            }
+
+            await command.execute(interaction);
+        }
+        else if (interaction.isButton()) {
+            const customId = interaction.customId;
+
+            // Handle ticket creation buttons first
+            if (customId.startsWith('ticket_') && ['general', 'staff', 'buycraft', 'punishments'].some(type => customId === `ticket_${type}`)) {
+                await handleTicketButton(interaction);
+            }
+            // Handle other ticket-related buttons
+            else if (customId.startsWith('ticket_')) {
+                await handleTicketManagement(interaction);
+            }
+            else if (customId.startsWith('user_')) {
+                await handleUserManagement(interaction);
+            }
+            else if (customId === 'close_confirm') {
+                await handleCloseConfirmation(interaction);
+            }
+            else if (customId.startsWith('rating_')) {
+                await handleRating(interaction);
+            }
+        }
+        else if (interaction.isModalSubmit()) {
+            if (interaction.customId.startsWith('ticket-')) {
+                await handleTicketModal(interaction);
+            }
+        }
+        else if (interaction.isStringSelectMenu()) {
+            if (interaction.customId === 'user_select') {
+                await handleUserSelect(interaction);
+            }
+        }
+    } catch (error) {
+        console.error('Error handling interaction:', error);
+        
+        const errorMessage = {
+            content: 'An error occurred while processing your request.',
+            ephemeral: true
+        };
+
+        if (interaction.isRepliable() && !interaction.replied) {
+            await interaction.reply(errorMessage);
+        } else if (interaction.isRepliable()) {
+            await interaction.followUp(errorMessage);
+        }
+    }
 });
 
-// Handle uncaught errors
-process.on('uncaughtException', async (error) => {
-  console.error('Uncaught exception:', error);
-  await Promise.all([
-    client.destroy(),
-    redisService.quit()
-  ]);
-  process.exit(1);
+// Handle guild member remove event (user leaves server)
+client.on(Events.GuildMemberRemove, async (member) => {
+    try {
+        // Check if services are initialized
+        if (!isInitialized) {
+            console.log('Skipping member remove handler - services not initialized');
+            return;
+        }
+
+        // Find all open tickets by this user
+        const tickets = await ticketService.getUserTickets(member.id, member.guild.id, ['OPEN', 'RATING']);
+
+        for (const ticket of tickets) {
+            const channel = member.guild.channels.cache.get(ticket.channelId);
+            if (channel?.isTextBased() && channel instanceof TextChannel) {
+                const embed = new EmbedBuilder()
+                    .setColor('#ff0000')
+                    .setTitle('User Left')
+                    .setDescription(`The ticket creator (${member.user.tag}) has left the server.`)
+                    .setTimestamp();
+
+                await channel.send({ embeds: [embed] });
+
+                // Generate and save transcript
+                const transcript = await generateTranscript(channel);
+                await ticketService.closeTicket(ticket._id!, 'SYSTEM', transcript);
+
+                // Delete channel after delay
+                setTimeout(() => channel.delete(), 5000);
+            }
+        }
+    } catch (error) {
+        console.error('Error handling member remove:', error);
+    }
 });
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', async (error) => {
-  console.error('Unhandled promise rejection:', error);
-  await Promise.all([
-    client.destroy(),
-    redisService.quit()
-  ]);
-  process.exit(1);
-});
-
-// Start the bot
-start();
+// Login to Discord
+client.login(config.token);

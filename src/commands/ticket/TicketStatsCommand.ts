@@ -1,0 +1,83 @@
+import { 
+    SlashCommandBuilder, 
+    ChatInputCommandInteraction,
+    EmbedBuilder,
+    PermissionFlagsBits,
+    GuildMember
+} from 'discord.js';
+import { ticketService } from '../../services/TicketService';
+
+const MANAGER_ROLES = [
+    'Platform Admin',
+    'System Admin',
+    'Co-Owner',
+    'Owner'
+];
+
+export const data = new SlashCommandBuilder()
+    .setName('ticketstats')
+    .setDescription('View ticket statistics for a staff member')
+    .addUserOption(option =>
+        option
+            .setName('user')
+            .setDescription('The staff member to view stats for')
+            .setRequired(true)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+
+export async function execute(interaction: ChatInputCommandInteraction) {
+    if (!interaction.guild || !interaction.member) return;
+
+    // Check if user has manager role
+    const member = interaction.member as GuildMember;
+    const hasManagerRole = member.roles.cache.some(role => MANAGER_ROLES.includes(role.name));
+
+    if (!hasManagerRole) {
+        await interaction.reply({
+            content: '❌ Only managers can use this command.',
+            ephemeral: true
+        });
+        return;
+    }
+
+    const targetUser = interaction.options.getUser('user');
+    if (!targetUser) {
+        await interaction.reply({
+            content: '❌ Please provide a valid user.',
+            ephemeral: true
+        });
+        return;
+    }
+
+    const stats = await ticketService.getStaffStats(targetUser.id, interaction.guild.id);
+
+    const embed = new EmbedBuilder()
+        .setColor('#2B2D31')
+        .setTitle(`📊 Ticket Statistics for ${targetUser.tag}`)
+        .addFields(
+            { 
+                name: 'Total Tickets Claimed', 
+                value: stats.totalClaimed.toString(),
+                inline: true 
+            },
+            { 
+                name: 'Average Rating', 
+                value: stats.averageRating > 0 
+                    ? `⭐ ${stats.averageRating.toFixed(1)}/5.0`
+                    : 'No ratings yet',
+                inline: true 
+            },
+            { 
+                name: 'Total Ratings Received', 
+                value: stats.totalRatings.toString(),
+                inline: true 
+            }
+        )
+        .setTimestamp()
+        .setFooter({ text: 'Stats are based on closed tickets with ratings' });
+
+    await interaction.reply({
+        embeds: [embed],
+        ephemeral: true
+    });
+} 

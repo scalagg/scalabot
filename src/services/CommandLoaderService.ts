@@ -1,48 +1,89 @@
 import { Client, Collection, REST, Routes } from 'discord.js';
-import { readdirSync } from 'fs';
+import { readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { config } from '../config/config';
 
 export class CommandLoaderService {
     private readonly client: Client;
     public readonly commands = new Collection<string, any>();
+    private loadedPaths = new Set<string>(); // Track loaded files to prevent duplicates
 
     constructor(client: Client) {
         this.client = client;
     }
 
-    async loadCommands() {
-        const commandsPath = join(__dirname, '..', 'commands');
-        console.log('Loading commands from:', commandsPath);
+    private async loadCommandsFromDirectory(dirPath: string) {
+        const items = readdirSync(dirPath);
+        console.log(`Scanning directory: ${dirPath}`);
+        console.log(`Found items: ${items.join(', ')}`);
+        
+        for (const item of items) {
+            const fullPath = join(dirPath, item);
+            const stat = statSync(fullPath);
 
-        try {
-            const commandFiles = readdirSync(commandsPath).filter(file => 
-                file.endsWith('.ts') || file.endsWith('.js')
-            );
+            if (stat.isDirectory()) {
+                console.log(`Entering subdirectory: ${fullPath}`);
+                // Recursively load commands from subdirectories
+                await this.loadCommandsFromDirectory(fullPath);
+            } else if (stat.isFile() && (item.endsWith('.ts') || item.endsWith('.js'))) {
+                // Skip if we've already loaded this file
+                if (this.loadedPaths.has(fullPath)) {
+                    console.log(`Skipping already loaded file: ${fullPath}`);
+                    continue;
+                }
+                this.loadedPaths.add(fullPath);
 
-            console.log('Found command files:', commandFiles);
-
-            this.commands.clear();
-
-            for (const file of commandFiles) {
-                const filePath = join(commandsPath, file);
-                console.log('Loading command file:', filePath);
+                console.log('Loading command file:', fullPath);
 
                 try {
-                    const command = require(filePath);
-                    console.log('Command data:', command?.data?.name);
+                    const command = require(fullPath);
+                    console.log('Command module:', {
+                        name: command?.data?.name,
+                        hasData: 'data' in command,
+                        hasExecute: 'execute' in command,
+                        exports: Object.keys(command)
+                    });
 
                     if ('data' in command && 'execute' in command) {
+                        if (this.commands.has(command.data.name)) {
+                            console.warn(`Command name conflict: ${command.data.name} is already registered`);
+                            console.log('Existing command:', this.commands.get(command.data.name));
+                            console.log('New command:', command);
+                        }
                         this.commands.set(command.data.name, command);
                         console.log(`Successfully loaded command: ${command.data.name}`);
                     } else {
-                        console.warn(`Command at ${filePath} is missing required properties`);
-                        console.log('Command structure:', Object.keys(command));
+                        console.warn(`Command at ${fullPath} is missing required properties`);
+                        console.log('Command structure:', {
+                            keys: Object.keys(command),
+                            data: command?.data,
+                            execute: typeof command?.execute
+                        });
                     }
                 } catch (error) {
-                    console.error(`Error loading command from ${filePath}:`, error);
+                    console.error(`Error loading command from ${fullPath}:`, error);
                 }
             }
+        }
+    }
+
+    async loadCommands() {
+        const commandsPath = join(__dirname, '..', 'commands');
+        console.log('Loading commands from:', commandsPath);
+        this.loadedPaths.clear(); // Reset loaded paths tracking
+
+        try {
+            this.commands.clear();
+            await this.loadCommandsFromDirectory(commandsPath);
+            
+            // Log final command list
+            console.log('Final loaded commands:', {
+                count: this.commands.size,
+                commands: Array.from(this.commands.entries()).map(([name, cmd]) => ({
+                    name,
+                    path: this.loadedPaths.has(cmd.__filename) ? cmd.__filename : 'unknown'
+                }))
+            });
         } catch (error) {
             console.error('Error loading commands:', error);
             throw error;
@@ -59,10 +100,20 @@ export class CommandLoaderService {
 
             console.log('Registering commands:', commandsData);
 
-            await rest.put(
-                Routes.applicationCommands(this.client.user!.id),
-                { body: commandsData }
-            );
+            // If testGuildId is set, register commands to that guild first
+            if (config.testGuildId) {
+                console.log(`Registering commands to test guild: ${config.testGuildId}`);
+                await rest.put(
+                    Routes.applicationGuildCommands(this.client.user!.id, config.testGuildId),
+                    { body: commandsData }
+                );
+            } else {
+                // Register commands globally
+                await rest.put(
+                    Routes.applicationCommands(this.client.user!.id),
+                    { body: commandsData }
+                );
+            }
 
             console.log('Successfully reloaded application (/) commands.');
         } catch (error) {
