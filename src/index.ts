@@ -173,7 +173,12 @@ client.on(Events.GuildMemberRemove, async (member) => {
                 await channel.send({ embeds: [embed] });
 
                 // Save transcript and close ticket
-                await transcriptService.saveTranscript(channel, 'SYSTEM', 'User left the server');
+                await transcriptService.saveTranscript(
+                    channel, 
+                    'SYSTEM',
+                    ticket,
+                    'User left the server'
+                );
                 await ticketService.closeTicket(ticket._id!, 'SYSTEM');
 
                 // Delete channel after delay

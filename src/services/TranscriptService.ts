@@ -1,5 +1,6 @@
 import { TextChannel, Message, EmbedBuilder, AttachmentBuilder } from 'discord.js';
 import { config } from '../config/config';
+import { Ticket } from '../models/Ticket';
 
 export class TranscriptService {
     private static instance: TranscriptService;
@@ -108,7 +109,7 @@ export class TranscriptService {
         };
     }
 
-    public async saveTranscript(channel: TextChannel, closedBy: string, reason?: string): Promise<void> {
+    public async saveTranscript(channel: TextChannel, closedBy: string, ticket: Ticket, reason?: string): Promise<void> {
         try {
             const { buffer, messageCount } = await this.createTranscript(channel);
             
@@ -120,17 +121,37 @@ export class TranscriptService {
 
             // Create embed for logs
             const embed = new EmbedBuilder()
-                .setTitle('Ticket Transcript')
                 .setColor('#2f3136')
-                .setDescription(`Ticket channel \`#${channel.name}\` has been closed`)
+                .setTitle('Ticket logs - Ticket automatically closed')
                 .addFields([
-                    { name: '📝 Messages', value: messageCount.toString(), inline: true },
-                    { name: '🔒 Closed By', value: `<@${closedBy}>`, inline: true },
-                    { name: '⏰ Closed At', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
+                    { 
+                        name: 'Guild',
+                        value: `${channel.guild.name} (ID: ${channel.guild.id})`,
+                        inline: false 
+                    },
+                    { 
+                        name: 'Channel',
+                        value: `#${channel.name} (ID: ${channel.id})`,
+                        inline: false 
+                    },
+                    { 
+                        name: 'Category',
+                        value: `${ticket.category} Support`,
+                        inline: false 
+                    },
+                    { 
+                        name: 'Author',
+                        value: `<@${ticket.userId}> (ID: ${ticket.userId})`,
+                        inline: false 
+                    }
                 ]);
 
             if (reason) {
-                embed.addFields({ name: '💭 Reason', value: reason, inline: false });
+                embed.addFields({ 
+                    name: 'Reason',
+                    value: reason,
+                    inline: false 
+                });
             }
 
             // Get logs channel

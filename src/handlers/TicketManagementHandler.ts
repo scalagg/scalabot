@@ -211,25 +211,32 @@ async function handleClose(interaction: ButtonInteraction, ticket: any) {
         return;
     }
 
-    // Create confirmation buttons
+    // Check if ticket is claimed
+    const isUnclaimed = !ticket.claimedBy;
+    
     const row = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
             new ButtonBuilder()
                 .setCustomId('ticket_close_confirm')
-                .setLabel('Close')
-                .setStyle(ButtonStyle.Danger),
-            new ButtonBuilder()
-                .setCustomId('ticket_close_rating')
-                .setLabel('Ask for rating')
-                .setStyle(ButtonStyle.Primary),
+                .setLabel('Yes')
+                .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
                 .setCustomId('ticket_close_cancel')
-                .setLabel('Cancel')
-                .setStyle(ButtonStyle.Secondary)
+                .setLabel('No')
+                .setStyle(ButtonStyle.Danger)
         );
 
+    const warningEmbed = new EmbedBuilder()
+        .setColor('#FFA500')
+        .setDescription('🔒 Are you sure you want to close this ticket?\n\n' +
+            (isUnclaimed ? 
+            "The ticket hasn't been claimed by anyone yet, so no one will get a review from it.\n" +
+            "You can claim this ticket before closing it to get a review from the ticket author. If " +
+            "you want to close the ticket without claiming it, you can use the button below."
+            : "This action cannot be undone."));
+
     await interaction.reply({
-        content: 'What would you like to do with this ticket?',
+        embeds: [warningEmbed],
         components: [row],
         flags: 1 << 6
     });
@@ -367,21 +374,28 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
         switch (interaction.customId) {
             case 'ticket_close_confirm':
                 await interaction.reply({ 
-                    content: '🔒 Closing ticket...', 
+                    content: 'Closing ticket...',
                     flags: 1 << 6 
                 });
 
                 if (interaction.channel instanceof TextChannel) {
                     // Save transcript before closing
-                    await transcriptService.saveTranscript(interaction.channel, interaction.user.id);
+                    await transcriptService.saveTranscript(
+                        interaction.channel,
+                        interaction.user.id,
+                        ticket
+                    );
                     
                     // Close ticket in database
                     await ticketService.closeTicket(ticket._id!, 'unrated');
                     
                     // Send closing message and delete channel
-                    const deletionTime = Math.floor((Date.now() + 10000) / 1000);
+                    const closingEmbed = new EmbedBuilder()
+                        .setColor('#2f3136')
+                        .setDescription('🔒 The ticket has been closed!\nThis channel will be deleted in 5 seconds.');
+
                     await interaction.channel.send({
-                        content: `🔒 This ticket has been closed by ${interaction.user}.\nThis channel will be deleted <t:${deletionTime}:R>`
+                        embeds: [closingEmbed]
                     });
                     setTimeout(async () => {
                         try {
@@ -389,8 +403,15 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
                         } catch (error) {
                             console.error('[ERROR] Failed to delete channel:', error);
                         }
-                    }, 10000);
+                    }, 5000);
                 }
+                break;
+
+            case 'ticket_close_cancel':
+                await interaction.reply({ 
+                    content: 'The ticket will not be closed.',
+                    flags: 1 << 6 
+                });
                 break;
 
             case 'ticket_close_rating':
@@ -416,13 +437,6 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
                         ]
                     });
                 }
-                break;
-
-            case 'ticket_close_cancel':
-                await interaction.reply({ 
-                    content: '✖️ Cancelled', 
-                    flags: 1 << 6 
-                });
                 break;
         }
     } catch (error) {
@@ -464,8 +478,9 @@ export async function handleRating(interaction: ButtonInteraction) {
         if (interaction.channel instanceof TextChannel) {
             // Save transcript before closing
             await transcriptService.saveTranscript(
-                interaction.channel, 
+                interaction.channel,
                 interaction.user.id,
+                ticket,
                 `Closed with ${rating} rating`
             );
             
@@ -473,9 +488,12 @@ export async function handleRating(interaction: ButtonInteraction) {
             await ticketService.closeTicket(ticket._id!, 'rated');
             
             // Send closing message and delete after delay
-            const deletionTime = Math.floor((Date.now() + 10000) / 1000);
+            const closingEmbed = new EmbedBuilder()
+                .setColor('#2f3136')
+                .setDescription('🔒 The ticket has been closed!\nThis channel will be deleted in 5 seconds.');
+
             await interaction.channel.send({
-                content: `🔒 This ticket has been closed with a ${rating} rating by ${interaction.user}.\nThis channel will be deleted <t:${deletionTime}:R>`
+                embeds: [closingEmbed]
             });
             setTimeout(async () => {
                 try {
@@ -483,7 +501,7 @@ export async function handleRating(interaction: ButtonInteraction) {
                 } catch (error) {
                     console.error('[ERROR] Failed to delete channel:', error);
                 }
-            }, 10000);
+            }, 5000);
         }
 
     } catch (error) {
