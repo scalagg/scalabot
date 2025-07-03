@@ -81,35 +81,57 @@ export class TicketService {
 
         // Create ticket information embed
         const embed = new EmbedBuilder()
-            .setColor('#2F3136')
-            .setTitle(`Ticket #${ticket.ticketNumber}`)
-            .setDescription('Thank you for creating a ticket. Staff will be with you shortly.')
-            .addFields(
-                { name: 'Category', value: ticket.category, inline: true },
-                { name: 'Created by', value: `<@${ticket.userId}>`, inline: true }
+            .setColor('#36393F')
+            .setTitle('SUPPORT TICKET')
+            .setDescription(
+                `Welcome <@${ticket.userId}> to our staff support ticket.\n` +
+                'Our staff will assist you as soon as possible. It may be possible that they are busy\n' +
+                'attending someone else, but for the moment we ask for your patience.\n' +
+                'If you don\'t receive a reply within **5 hours**, you can tag a staff member.'
             )
-            .setTimestamp();
+            .addFields(
+                { 
+                    name: '📝 Ticket type',
+                    value: `${ticket.category} Support`,
+                    inline: false 
+                },
+                { 
+                    name: '⏰ This ticket was made',
+                    value: '0 seconds ago',
+                    inline: false 
+                }
+            );
 
         // Add Minecraft info if provided
         if (ticket.metadata.minecraft) {
             embed.addFields(
-                { name: 'Minecraft Username', value: ticket.metadata.minecraft.username, inline: true },
-                { name: 'Game Mode', value: ticket.metadata.minecraft.gameMode || 'Not specified', inline: true }
+                { 
+                    name: '👤 IGN',
+                    value: ticket.metadata.minecraft.username,
+                    inline: false 
+                },
+                { 
+                    name: '🎮 Game Mode',
+                    value: ticket.metadata.minecraft.gameMode || 'Not specified',
+                    inline: false 
+                }
             );
         }
 
         // Add issue if provided
         if (ticket.metadata.issue) {
-            embed.addFields(
-                { name: 'Issue', value: ticket.metadata.issue }
-            );
+            embed.addFields({
+                name: '💭 Issue',
+                value: ticket.metadata.issue,
+                inline: false
+            });
         }
 
-        // Add any additional metadata fields
-        Object.entries(ticket.metadata).forEach(([key, value]) => {
-            if (!['minecraft', 'issue'].includes(key)) {
-                embed.addFields({ name: key, value: String(value) });
-            }
+        // Add support website link
+        embed.addFields({
+            name: 'For more support, you can visit our website',
+            value: 'https://placeholder.com/staff-support',
+            inline: false
         });
 
         // Create ticket management buttons
@@ -134,7 +156,6 @@ export class TicketService {
 
         // Send the initial message with embed and buttons
         await channel.send({
-            content: `Welcome <@${ticket.userId}>!\nStaff will be with you shortly.`,
             embeds: [embed],
             components: [row]
         });

@@ -205,11 +205,12 @@ async function handleClose(interaction: ButtonInteraction, ticket: any) {
     if (!canClose) {
         await interaction.reply({
             content: '❌ You do not have permission to close this ticket.',
-            ephemeral: true
+            flags: 1 << 6
         });
         return;
     }
 
+    // Create confirmation buttons
     const row = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
             new ButtonBuilder()
@@ -229,7 +230,7 @@ async function handleClose(interaction: ButtonInteraction, ticket: any) {
     await interaction.reply({
         content: 'What would you like to do with this ticket?',
         components: [row],
-        ephemeral: true
+        flags: 1 << 6
     });
 }
 
@@ -350,121 +351,115 @@ export async function handleUserSelect(interaction: StringSelectMenuInteraction)
 }
 
 export async function handleCloseConfirmation(interaction: ButtonInteraction) {
-    if (!interaction.guild || !interaction.channel) return;
+    console.log('[DEBUG] Close confirmation clicked:', interaction.customId);
 
-    const ticket = await ticketService.getTicketByChannel(interaction.channel.id);
-    if (!ticket) return;
-
-    switch (interaction.customId) {
-        case 'ticket_close_confirm':
-            await closeTicket(interaction, ticket._id!, false);
-            break;
-        case 'ticket_close_rating':
-            await requestRating(interaction, ticket);
-            break;
-        case 'ticket_close_cancel':
-            await interaction.update({
-                content: 'Ticket closure cancelled.',
-                components: []
+    try {
+        const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
+        if (!ticket) {
+            await interaction.reply({ 
+                content: '❌ Ticket not found', 
+                flags: 1 << 6 
             });
-            break;
-    }
-}
+            return;
+        }
 
-async function closeTicket(interaction: ButtonInteraction, ticketId: ObjectId, wasRated: boolean) {
-    const channel = interaction.channel as TextChannel;
-    if (!channel) return;
+        switch (interaction.customId) {
+            case 'ticket_close_confirm':
+                await interaction.reply({ 
+                    content: '🔒 Closing ticket...', 
+                    flags: 1 << 6 
+                });
+                await ticketService.closeTicket(ticket._id!, 'unrated');
+                if (interaction.channel) {
+                    await interaction.channel.delete();
+                }
+                break;
 
-    // Generate transcript
-    const transcript = await generateTranscript(channel);
+            case 'ticket_close_rating':
+                await interaction.reply({ 
+                    content: '⭐ Please rate your experience:', 
+                    flags: 1 << 6 
+                });
+                if (interaction.channel && 'send' in interaction.channel) {
+                    await interaction.channel.send({
+                        content: `<@${ticket.userId}>, please rate your experience:`,
+                        components: [
+                            new ActionRowBuilder<ButtonBuilder>()
+                                .addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId('ticket_rate_good')
+                                        .setLabel('👍 Good')
+                                        .setStyle(ButtonStyle.Success),
+                                    new ButtonBuilder()
+                                        .setCustomId('ticket_rate_bad')
+                                        .setLabel('👎 Bad')
+                                        .setStyle(ButtonStyle.Danger)
+                                )
+                        ]
+                    });
+                }
+                break;
 
-    // Send transcript to logs channel
-    const logsChannel = await interaction.guild!.channels.fetch(config.ticketLogsChannelId) as TextChannel;
-    if (logsChannel?.isTextBased()) {
-        await logsChannel.send({
-            content: `Ticket closed by ${interaction.user}\nTranscript:\n\`\`\`${transcript}\`\`\``
+            case 'ticket_close_cancel':
+                await interaction.reply({ 
+                    content: '✖️ Cancelled', 
+                    flags: 1 << 6 
+                });
+                break;
+        }
+    } catch (error) {
+        console.error('[ERROR] Close confirmation error:', error);
+        await interaction.reply({ 
+            content: '❌ An error occurred', 
+            flags: 1 << 6 
         });
     }
-
-    // Delete the channel
-    await channel.delete();
-
-    // Update ticket status in database
-    await ticketService.closeTicket(ticketId, wasRated ? 'rated' : 'unrated');
-}
-
-async function requestRating(interaction: ButtonInteraction, ticket: any) {
-    const channel = interaction.channel as TextChannel;
-    if (!channel?.isTextBased()) return;
-
-    // Send rating message
-    await channel.send({
-        content: `<@${ticket.userId}>, please rate your experience with this ticket before it closes.`,
-        components: [
-            new ActionRowBuilder<ButtonBuilder>()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('ticket_rate_good')
-                        .setLabel('👍 Good')
-                        .setStyle(ButtonStyle.Success),
-                    new ButtonBuilder()
-                        .setCustomId('ticket_rate_bad')
-                        .setLabel('👎 Bad')
-                        .setStyle(ButtonStyle.Danger)
-                )
-        ]
-    });
-}
-
-async function generateTranscript(channel: TextChannel): Promise<string> {
-    const messages = await channel.messages.fetch({ limit: 100 });
-    let transcript = `Ticket Transcript - ${channel.name}\n`;
-    transcript += `Created at: ${channel.createdAt}\n\n`;
-
-    messages.reverse().forEach(msg => {
-        transcript += `[${msg.createdAt.toISOString()}] ${msg.author.tag}: ${msg.content}\n`;
-        msg.embeds.forEach(embed => {
-            transcript += `[Embed: ${embed.title || 'Untitled'}]\n`;
-        });
-        msg.attachments.forEach(attachment => {
-            transcript += `[Attachment: ${attachment.url}]\n`;
-        });
-    });
-
-    return transcript;
 }
 
 export async function handleRating(interaction: ButtonInteraction) {
-    if (!interaction.guild || !interaction.channel) return;
+    try {
+        const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
+        if (!ticket) {
+            await interaction.reply({ 
+                content: '❌ Ticket not found', 
+                flags: 1 << 6 
+            });
+            return;
+        }
 
-    const ticket = await ticketService.getTicketByChannel(interaction.channel.id);
-    if (!ticket || ticket.status !== 'RATING') return;
+        // Only allow the ticket creator to rate
+        if (interaction.user.id !== ticket.userId) {
+            await interaction.reply({ 
+                content: '❌ Only the ticket creator can rate the ticket', 
+                flags: 1 << 6 
+            });
+            return;
+        }
 
-    if (interaction.user.id !== ticket.userId) {
-        await interaction.reply({
-            content: '❌ Only the ticket creator can provide a rating.',
-            ephemeral: true
+        const rating = interaction.customId === 'ticket_rate_good' ? 'good' : 'bad';
+        
+        await interaction.reply({ 
+            content: `Thank you for your ${rating} rating! Closing ticket...`, 
+            flags: 1 << 6 
         });
-        return;
+        
+        // Close the ticket
+        await ticketService.closeTicket(ticket._id!, 'rated');
+        
+        // Delete the channel after a short delay
+        setTimeout(async () => {
+            try {
+                await interaction.channel?.delete();
+            } catch (error) {
+                console.error('[ERROR] Failed to delete channel:', error);
+            }
+        }, 2000);
+
+    } catch (error) {
+        console.error('[ERROR]', error);
+        await interaction.reply({ 
+            content: '❌ An error occurred', 
+            flags: 1 << 6 
+        });
     }
-
-    const rating = parseInt(interaction.customId.split('_')[2]);
-    
-    // Create modal for feedback
-    const modal = new ModalBuilder()
-        .setCustomId(`ticket_feedback_${rating}`)
-        .setTitle('Provide Feedback');
-
-    const feedbackInput = new TextInputBuilder()
-        .setCustomId('feedback')
-        .setLabel('Would you like to provide any additional feedback?')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false)
-        .setPlaceholder('Optional feedback about your experience...');
-
-    const row = new ActionRowBuilder<TextInputBuilder>()
-        .addComponents(feedbackInput);
-
-    modal.addComponents(row);
-    await interaction.showModal(modal);
 } 

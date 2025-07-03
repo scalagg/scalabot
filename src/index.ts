@@ -83,7 +83,7 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             if (interaction.isRepliable()) {
                 await interaction.reply({
                     content: '❌ Bot is still initializing. Please try again in a moment.',
-                    ephemeral: true
+                    flags: 1 << 6
                 });
             }
             return;
@@ -100,23 +100,27 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         }
         else if (interaction.isButton()) {
             const customId = interaction.customId;
+            console.log('[DEBUG] Button interaction:', customId);
 
-            // Handle ticket creation buttons first
+            // Handle ticket creation buttons
             if (customId.startsWith('ticket_') && ['general', 'staff', 'buycraft', 'punishments'].some(type => customId === `ticket_${type}`)) {
                 await handleTicketButton(interaction);
+            }
+            // Handle close confirmation buttons
+            else if (customId.startsWith('ticket_close_')) {
+                await handleCloseConfirmation(interaction);
+            }
+            // Handle rating buttons
+            else if (customId.startsWith('ticket_rate_')) {
+                await handleRating(interaction);
             }
             // Handle other ticket-related buttons
             else if (customId.startsWith('ticket_')) {
                 await handleTicketManagement(interaction);
             }
+            // Handle user management buttons
             else if (customId.startsWith('user_')) {
                 await handleUserManagement(interaction);
-            }
-            else if (customId === 'close_confirm') {
-                await handleCloseConfirmation(interaction);
-            }
-            else if (customId.startsWith('rating_')) {
-                await handleRating(interaction);
             }
         }
         else if (interaction.isModalSubmit()) {
@@ -134,7 +138,7 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         
         const errorMessage = {
             content: 'An error occurred while processing your request.',
-            ephemeral: true
+            flags: 1 << 6
         };
 
         if (interaction.isRepliable() && !interaction.replied) {

@@ -5,6 +5,7 @@ import { join } from 'path';
 interface BotConfig {
   token: string;
   welcomeChannelId: string;
+  ticketLogsChannelId: string;
   apiBaseUrl: string;
   apiKey: string;
   mongoUri: string;
@@ -26,6 +27,7 @@ interface BotConfig {
       memberCount?: number;
     };
   };
+  welcomeMessage: string;
 }
 
 class Config {
@@ -48,8 +50,8 @@ class Config {
 
   private validateConfig() {
     const requiredFields: (keyof BotConfig)[] = [
-      'token', 'welcomeChannelId', 'apiBaseUrl', 'apiKey',
-      'mongoUri', 'mongoDbName', 'redisHost', 'redisPort', 'redisPassword'
+      'token', 'welcomeChannelId', 'ticketLogsChannelId', 'apiBaseUrl', 'apiKey',
+      'mongoUri', 'mongoDbName', 'redisHost', 'redisPort', 'redisPassword', 'welcomeMessage'
     ];
 
     for (const field of requiredFields) {
@@ -72,6 +74,10 @@ class Config {
 
   public get welcomeChannelId(): string {
     return this.config.welcomeChannelId;
+  }
+
+  public get ticketLogsChannelId(): string {
+    return this.config.ticketLogsChannelId;
   }
 
   public get apiBaseUrl(): string {
@@ -109,12 +115,17 @@ class Config {
   public get welcomeImageConfig() {
     return this.config.welcomeImage || {};
   }
+
+  public get welcomeMessage(): string {
+    return this.config.welcomeMessage;
+  }
 }
 
 // Export a type-safe config object with all the getters
 export const config = {
   get token() { return Config.getInstance().token; },
   get welcomeChannelId() { return Config.getInstance().welcomeChannelId; },
+  get ticketLogsChannelId() { return Config.getInstance().ticketLogsChannelId; },
   get apiBaseUrl() { return Config.getInstance().apiBaseUrl; },
   get apiKey() { return Config.getInstance().apiKey; },
   get mongoUri() { return Config.getInstance().mongoUri; },
@@ -123,5 +134,6 @@ export const config = {
   get redisPort() { return Config.getInstance().redisPort; },
   get redisPassword() { return Config.getInstance().redisPassword; },
   get testGuildId() { return Config.getInstance().testGuildId; },
-  get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; }
+  get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; },
+  get welcomeMessage() { return Config.getInstance().welcomeMessage; }
 } as const; 
