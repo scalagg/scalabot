@@ -97,7 +97,7 @@ export class TicketService {
                 },
                 { 
                     name: '⏰ This ticket was made',
-                    value: '0 seconds ago',
+                    value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
                     inline: false 
                 }
             );
@@ -248,6 +248,15 @@ export class TicketService {
             userId,
             guildId,
             status: 'OPEN'
+        });
+    }
+
+    async getUserTickets(userId: string, guildId: string, statuses: string[]): Promise<Ticket[]> {
+        this.checkInitialized();
+        return TicketModel.find({
+            userId,
+            guildId,
+            status: { $in: statuses }
         });
     }
 

@@ -19,6 +19,7 @@ import {
     MessageActionRowComponentBuilder
 } from 'discord.js';
 import { ticketService } from '../services/TicketService';
+import { transcriptService } from '../services/TranscriptService';
 import { ObjectId } from 'mongodb';
 import { config } from '../config/config';
 
@@ -369,9 +370,26 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
                     content: '🔒 Closing ticket...', 
                     flags: 1 << 6 
                 });
-                await ticketService.closeTicket(ticket._id!, 'unrated');
-                if (interaction.channel) {
-                    await interaction.channel.delete();
+
+                if (interaction.channel instanceof TextChannel) {
+                    // Save transcript before closing
+                    await transcriptService.saveTranscript(interaction.channel, interaction.user.id);
+                    
+                    // Close ticket in database
+                    await ticketService.closeTicket(ticket._id!, 'unrated');
+                    
+                    // Send closing message and delete channel
+                    const deletionTime = Math.floor((Date.now() + 10000) / 1000);
+                    await interaction.channel.send({
+                        content: `🔒 This ticket has been closed by ${interaction.user}.\nThis channel will be deleted <t:${deletionTime}:R>`
+                    });
+                    setTimeout(async () => {
+                        try {
+                            await interaction.channel?.delete();
+                        } catch (error) {
+                            console.error('[ERROR] Failed to delete channel:', error);
+                        }
+                    }, 10000);
                 }
                 break;
 
@@ -380,7 +398,7 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
                     content: '⭐ Please rate your experience:', 
                     flags: 1 << 6 
                 });
-                if (interaction.channel && 'send' in interaction.channel) {
+                if (interaction.channel instanceof TextChannel) {
                     await interaction.channel.send({
                         content: `<@${ticket.userId}>, please rate your experience:`,
                         components: [
@@ -443,17 +461,30 @@ export async function handleRating(interaction: ButtonInteraction) {
             flags: 1 << 6 
         });
         
-        // Close the ticket
-        await ticketService.closeTicket(ticket._id!, 'rated');
-        
-        // Delete the channel after a short delay
-        setTimeout(async () => {
-            try {
-                await interaction.channel?.delete();
-            } catch (error) {
-                console.error('[ERROR] Failed to delete channel:', error);
-            }
-        }, 2000);
+        if (interaction.channel instanceof TextChannel) {
+            // Save transcript before closing
+            await transcriptService.saveTranscript(
+                interaction.channel, 
+                interaction.user.id,
+                `Closed with ${rating} rating`
+            );
+            
+            // Close the ticket
+            await ticketService.closeTicket(ticket._id!, 'rated');
+            
+            // Send closing message and delete after delay
+            const deletionTime = Math.floor((Date.now() + 10000) / 1000);
+            await interaction.channel.send({
+                content: `🔒 This ticket has been closed with a ${rating} rating by ${interaction.user}.\nThis channel will be deleted <t:${deletionTime}:R>`
+            });
+            setTimeout(async () => {
+                try {
+                    await interaction.channel?.delete();
+                } catch (error) {
+                    console.error('[ERROR] Failed to delete channel:', error);
+                }
+            }, 10000);
+        }
 
     } catch (error) {
         console.error('[ERROR]', error);

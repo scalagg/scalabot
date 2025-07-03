@@ -25,7 +25,7 @@ import {
 } from './handlers/TicketManagementHandler';
 import { mongoService } from './services/MongoService';
 import { ticketService } from './services/TicketService';
-import { generateTranscript, closeTicket } from './utils/ticketUtils';
+import { transcriptService } from './services/TranscriptService';
 
 // Create Discord client
 const client = new Client({
@@ -172,9 +172,9 @@ client.on(Events.GuildMemberRemove, async (member) => {
 
                 await channel.send({ embeds: [embed] });
 
-                // Generate and save transcript
-                const transcript = await generateTranscript(channel);
-                await ticketService.closeTicket(ticket._id!, 'SYSTEM', transcript);
+                // Save transcript and close ticket
+                await transcriptService.saveTranscript(channel, 'SYSTEM', 'User left the server');
+                await ticketService.closeTicket(ticket._id!, 'SYSTEM');
 
                 // Delete channel after delay
                 setTimeout(() => channel.delete(), 5000);
