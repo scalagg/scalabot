@@ -29,6 +29,7 @@ import { ticketService } from './services/TicketService';
 import { transcriptService } from './services/TranscriptService';
 import { serverUtils } from './utils/ServerUtils';
 import { PunishmentService } from './services/PunishmentService';
+import { moderationService } from './services/ModerationService';
 import { handleButton } from './commands/deployverify';
 
 // Create Discord client
@@ -70,7 +71,11 @@ client.once(Events.ClientReady, async (readyClient) => {
         const punishmentService = PunishmentService.initialize(client);
         punishmentService.startPeriodicChecks();
 
-        // 4. Initialize commands last
+        // 4. Initialize moderation service
+        moderationService.setClient(client);
+        console.log('Moderation service initialized');
+
+        // 5. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 
@@ -129,6 +134,16 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             else if (buttonInteraction.customId.startsWith('ticket_')) {
                 await handleTicketManagement(buttonInteraction);
             }
+            // Handle history navigation buttons
+            else if (buttonInteraction.customId.startsWith('history_')) {
+                const { handleHistoryButton, handleHistoryBack } = await import('./commands/moderation/history');
+                
+                if (buttonInteraction.customId.startsWith('history_back_')) {
+                    await handleHistoryBack(buttonInteraction);
+                } else if (buttonInteraction.customId.startsWith('history_active_') || buttonInteraction.customId.startsWith('history_inactive_')) {
+                    await handleHistoryButton(buttonInteraction);
+                }
+            }
         }
         else if (interaction.isModalSubmit()) {
             const modalInteraction = interaction as ModalSubmitInteraction;
@@ -144,8 +159,13 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             // Handle any select menu interactions here if needed
             console.log('[DEBUG] Select menu interaction:', interaction.customId);
             
+            // Handle history select menu
+            if (interaction.customId.startsWith('history_')) {
+                const { handleHistorySelect } = await import('./commands/moderation/history');
+                await handleHistorySelect(interaction);
+            }
             // Handle ticket-related select menus
-            if (interaction.customId.startsWith('ticket_')) {
+            else if (interaction.customId.startsWith('ticket_')) {
                 await handleTicketManagement(interaction);
             }
         } else if (interaction.isChatInputCommand()) {

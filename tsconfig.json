@@ -28,6 +28,6 @@
     "sourceMap": true,
     "outDir": "dist"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "tests/moderation.js"],
   "exclude": ["node_modules", "dist"]
 }

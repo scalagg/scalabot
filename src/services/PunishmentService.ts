@@ -533,6 +533,65 @@ class PunishmentService {
             console.error(`[PunishmentService] Error sending status DM to ${member.user.tag}:`, error);
         }
     }
+
+    /**
+     * Lookup a specific punishment by ID
+     */
+    public async lookupPunishment(punishmentId: string): Promise<{
+        success: boolean;
+        punishment?: any;
+        error?: string;
+    }> {
+        try {
+            console.log(`[PunishmentService] Looking up punishment: ${punishmentId}`);
+            
+            // Remove # prefix if present
+            const cleanId = punishmentId.replace(/^#/, '');
+            
+            // Validate punishment ID format
+            if (!cleanId || cleanId.length < 8) {
+                return {
+                    success: false,
+                    error: 'Invalid punishment ID format (minimum 8 characters required)'
+                };
+            }
+
+            // Fetch punishment details from the API
+            const response = await fetch(`${config.apiBaseUrl}/punishment/${cleanId}`, {
+                headers: {
+                    'Authorization': config.apiKey
+                }
+            });
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    return {
+                        success: false,
+                        error: `Punishment with ID ${cleanId} was not found`
+                    };
+                } else {
+                    return {
+                        success: false,
+                        error: `API returned status ${response.status}`
+                    };
+                }
+            }
+
+            const punishment = await response.json();
+            console.log(`[PunishmentService] Successfully retrieved punishment: ${cleanId}`);
+            
+            return {
+                success: true,
+                punishment: punishment
+            };
+        } catch (error) {
+            console.error(`[PunishmentService] Error looking up punishment ${punishmentId}:`, error);
+            return {
+                success: false,
+                error: 'Failed to fetch punishment details from the API'
+            };
+        }
+    }
 }
 
 export { PunishmentService }; 
