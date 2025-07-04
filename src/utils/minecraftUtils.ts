@@ -1,5 +1,10 @@
 import fetch from 'node-fetch';
 import { config } from '../config/config';
+import { MinecraftServerListPing } from 'minecraft-status';
+import dns from 'dns';
+import { promisify } from 'util';
+
+const resolveSrv = promisify(dns.resolveSrv);
 
 interface PlayerDBResponse {
     code: string;
@@ -163,5 +168,67 @@ export async function checkActivePunishments(uuid: string): Promise<{
     } catch (error) {
         console.error('[ERROR] Failed to check punishments:', error);
         throw error;
+    }
+}
+
+/**
+ * Resolve Minecraft server address including SRV records
+ */
+async function resolveMinecraftServer(domain: string): Promise<{ host: string; port: number }> {
+    try {
+        // Try to resolve SRV record
+        const srvRecords = await resolveSrv(`_minecraft._tcp.${domain}`);
+        if (srvRecords && srvRecords.length > 0) {
+            return {
+                host: srvRecords[0].name,
+                port: srvRecords[0].port
+            };
+        }
+    } catch (error) {
+        console.log(`[MinecraftUtils] No SRV record found for ${domain}, using default port`);
+    }
+
+    // If no SRV record, return original domain with default port
+    return {
+        host: domain,
+        port: 25565
+    };
+}
+
+/**
+ * Ping a Minecraft server to get its status
+ */
+export async function pingServer(ip: string): Promise<{
+    online: boolean;
+    players?: {
+        online: number;
+        max: number;
+    };
+    ping?: number;
+}> {
+    try {
+        console.log(`[MinecraftUtils] Resolving server address for: ${ip}`);
+        const { host, port } = await resolveMinecraftServer(ip);
+        console.log(`[MinecraftUtils] Resolved to ${host}:${port}`);
+        
+        const startTime = Date.now();
+        const status = await MinecraftServerListPing.ping(4, host, port, 5000);
+        const ping = Date.now() - startTime;
+
+        console.log(`[MinecraftUtils] Server status:`, status);
+        
+        return {
+            online: true,
+            players: {
+                online: status.players.online,
+                max: status.players.max
+            },
+            ping
+        };
+    } catch (error) {
+        console.error(`[MinecraftUtils] Failed to ping server ${ip}:`, error);
+        return {
+            online: false
+        };
     }
 } 
