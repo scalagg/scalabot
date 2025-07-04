@@ -1,8 +1,8 @@
 import fetch from 'node-fetch';
 import { config } from '../config/config';
-import { MinecraftServerListPing } from 'minecraft-status';
 import dns from 'dns';
 import { promisify } from 'util';
+import { status } from 'minecraft-server-util';
 
 const resolveSrv = promisify(dns.resolveSrv);
 
@@ -40,6 +40,57 @@ interface Punishment {
     removedBy: string | null;
     removedReason: string | null;
     target: string;
+}
+
+interface MinecraftStatus {
+    version: {
+        name: string;
+        protocol: number;
+    };
+    players: {
+        max: number;
+        online: number;
+        sample?: Array<{
+            name: string;
+            id: string;
+        }>;
+    };
+    description: string | {
+        text?: string;
+        extra?: Array<{
+            text?: string;
+            color?: string;
+            bold?: boolean;
+        }>;
+    };
+    favicon?: string;
+}
+
+interface McStatusResponse {
+    online: boolean;
+    host: string;
+    port: number;
+    version: {
+        name_raw: string;
+        name_clean: string;
+        protocol: number;
+    };
+    players: {
+        online: number;
+        max: number;
+        list: Array<{
+            uuid: string;
+            name_raw: string;
+            name_clean: string;
+            name_html: string;
+        }>;
+    };
+    motd: {
+        raw: string;
+        clean: string;
+        html: string;
+    };
+    icon?: string;
 }
 
 export async function verifyMinecraftUsername(username: string): Promise<{
@@ -196,7 +247,31 @@ async function resolveMinecraftServer(domain: string): Promise<{ host: string; p
 }
 
 /**
- * Ping a Minecraft server to get its status
+ * Recursively extract text from MOTD description object
+ */
+function extractMotdText(description: any): string {
+    if (typeof description === 'string') {
+        return description;
+    }
+
+    let text = description.text || '';
+
+    if (description.extra) {
+        for (const part of description.extra) {
+            if (typeof part === 'string') {
+                text += part;
+            } else {
+                // Recursively extract text from nested extra arrays
+                text += extractMotdText(part);
+            }
+        }
+    }
+
+    return text;
+}
+
+/**
+ * Ping a Minecraft server to get its status using mcstatus.io API
  */
 export async function pingServer(ip: string): Promise<{
     online: boolean;
@@ -205,28 +280,38 @@ export async function pingServer(ip: string): Promise<{
         max: number;
     };
     ping?: number;
+    motd?: string;
+    rawMotd?: any;
+    version?: string;
+    icon?: string;
 }> {
     try {
-        console.log(`[MinecraftUtils] Resolving server address for: ${ip}`);
-        const { host, port } = await resolveMinecraftServer(ip);
-        console.log(`[MinecraftUtils] Resolved to ${host}:${port}`);
-        
-        const startTime = Date.now();
-        const status = await MinecraftServerListPing.ping(4, host, port, 5000);
-        const ping = Date.now() - startTime;
+        console.log(`[MinecraftUtils] Fetching status for: ${ip}`);
+        const response = await fetch(`https://api.mcstatus.io/v2/status/java/${ip}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json() as McStatusResponse;
 
-        console.log(`[MinecraftUtils] Server status:`, status);
+        console.log(`[MinecraftUtils] Server status:`, data);
         
+        if (!data.online) {
+            return { online: false };
+        }
+
         return {
             online: true,
             players: {
-                online: status.players.online,
-                max: status.players.max
+                online: data.players.online,
+                max: data.players.max
             },
-            ping
+            motd: data.motd.clean,
+            rawMotd: data.motd.html, // Using HTML version for better formatting
+            version: data.version.name_clean,
+            icon: data.icon
         };
     } catch (error) {
-        console.error(`[MinecraftUtils] Failed to ping server ${ip}:`, error);
+        console.error(`[MinecraftUtils] Failed to get server status for ${ip}:`, error);
         return {
             online: false
         };

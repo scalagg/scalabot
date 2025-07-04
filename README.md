@@ -66,7 +66,7 @@ bun run index.ts
 - [x] Ticket system implementation
 
 ### Phase 2: Server Management (Planned)
-- [ ] Server status monitoring
+- [x] Server status monitoring
 - [ ] Player tracking
 - [ ] MOTD display
 - [ ] Performance metrics
