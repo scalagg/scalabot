@@ -62,8 +62,8 @@ bun run index.ts
 ### Phase 1: Core Infrastructure (In Progress)
 - [x] Basic bot setup
 - [x] Redis integration
-- [ ] Cross-platform punishment system
-- [ ] Ticket system implementation
+- [x] Cross-platform punishment system
+- [x] Ticket system implementation
 
 ### Phase 2: Server Management (Planned)
 - [ ] Server status monitoring
