@@ -6,6 +6,7 @@ import {
     GuildMember
 } from 'discord.js';
 import { ticketService } from '../../services/TicketService';
+import { serverUtils } from '../../utils/ServerUtils';
 
 const MANAGER_ROLES = [
     'Platform Admin',
@@ -27,6 +28,9 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) return;
+
+    // Set server type based on guild ID
+    serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId));
 
     // Check if user has manager role
     const member = interaction.member as GuildMember;
@@ -52,7 +56,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const stats = await ticketService.getStaffStats(targetUser.id, interaction.guild.id);
 
     const embed = new EmbedBuilder()
-        .setColor('#2B2D31')
+        .setColor(serverUtils.getColor('primary'))
         .setTitle(`📊 Ticket Statistics for ${targetUser.tag}`)
         .addFields(
             { 
@@ -74,7 +78,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
             }
         )
         .setTimestamp()
-        .setFooter({ text: 'Stats are based on closed tickets with ratings' });
+        .setFooter(serverUtils.getFooter());
 
     await interaction.reply({
         embeds: [embed],

@@ -6,8 +6,10 @@ import {
     ButtonBuilder,
     ButtonStyle,
     ChatInputCommandInteraction,
-    ColorResolvable
+    ColorResolvable,
+    TextChannel
 } from 'discord.js';
+import { serverUtils } from '../../utils/ServerUtils';
 
 const STAFF_ROLES = [
     'Learner',
@@ -46,12 +48,23 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild) return;
+    if (!interaction.channel || !(interaction.channel instanceof TextChannel)) {
+        await interaction.reply({
+            content: '❌ This command can only be used in text channels!',
+            ephemeral: true
+        });
+        return;
+    }
+
+    // Set server type based on guild ID
+    serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId));
 
     const embed = new EmbedBuilder()
-        .setColor('#2B2D31' as ColorResolvable)
+        .setColor(serverUtils.getColor('primary'))
         .setTitle('📝 STAFF SUPPORT')
         .setDescription('We will work to solve all your problems.\n\nCreate a ticket to contact with our staff members.\nIf your request does not receive a response quickly, please be patient.\nRemember that you can also create a ticket on our website.')
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter(serverUtils.getFooter());
 
     const row = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(

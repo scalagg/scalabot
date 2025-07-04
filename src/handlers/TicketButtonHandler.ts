@@ -14,6 +14,7 @@ import {
 import type { OverwriteResolvable, PermissionOverwriteOptions } from 'discord.js';
 import { ticketService } from '../services/TicketService';
 import { TicketCategory } from '../models/Ticket';
+import { serverUtils } from '../utils/ServerUtils';
 
 export async function handleTicketButton(interaction: ButtonInteraction) {
     try {
@@ -184,7 +185,7 @@ export async function createTicketChannel(
 
     // Create ticket embed
     const embed = new EmbedBuilder()
-        .setColor('#2B2D31')
+        .setColor(serverUtils.getColor('primary'))
         .setTitle(`Ticket #${ticketNumber}`)
         .setDescription('Thank you for creating a ticket. Please wait for a staff member to assist you.')
         .addFields(
@@ -194,7 +195,8 @@ export async function createTicketChannel(
             { name: 'Game Mode', value: metadata.minecraft.gameMode, inline: true },
             { name: 'Issue', value: metadata.issue }
         )
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter(serverUtils.getFooter());
 
     // Create ticket buttons
     const buttons = new ActionRowBuilder<ButtonBuilder>()
@@ -241,23 +243,20 @@ export async function createTicketChannel(
 }
 
 function getStaffPermissions(interaction: ButtonInteraction): OverwriteResolvable[] {
-    const staffRoles = [
-        'Learner',
-        'Trial Mod',
-        'Mod',
-        'Mod+',
-        'Senior Mod',
-        'Admin',
-        'Senior Admin',
-        'System Admin',
-        'Platform Admin',
-        'Co-Owner',
-        'Owner'
-    ];
+    if (!interaction.guild || !interaction.guildId) return [];
 
-    return staffRoles.map(roleName => {
-        const role = interaction.guild?.roles.cache.find(r => r.name === roleName);
-        if (role) {
+    // Set server type based on guild ID
+    serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId));
+
+    // Get staff roles from ServerUtils
+    const staffRoles = serverUtils.getRoles().staff;
+
+    // Map role names to role IDs and create permission overwrites
+    return staffRoles
+        .map(roleName => {
+            const role = interaction.guild!.roles.cache.find(r => r.name === roleName);
+            if (!role) return null;
+
             return {
                 id: role.id,
                 allow: [
@@ -266,9 +265,8 @@ function getStaffPermissions(interaction: ButtonInteraction): OverwriteResolvabl
                     PermissionFlagsBits.ReadMessageHistory
                 ]
             } as OverwriteResolvable;
-        }
-        return null;
-    }).filter(Boolean) as OverwriteResolvable[];
+        })
+        .filter((perm): perm is OverwriteResolvable => perm !== null);
 }
 
 async function getNextTicketNumber(guildId: string): Promise<number> {

@@ -16,346 +16,123 @@ import {
     ComponentType,
     Message,
     APIButtonComponent,
-    MessageActionRowComponentBuilder
+    MessageActionRowComponentBuilder,
+    ModalSubmitInteraction
 } from 'discord.js';
 import { ticketService } from '../services/TicketService';
 import { transcriptService } from '../services/TranscriptService';
 import { ObjectId } from 'mongodb';
 import { config } from '../config/config';
-
-const ADMIN_ROLES = [
-    'Admin',
-    'Senior Admin',
-    'System Admin',
-    'Platform Admin',
-    'Co-Owner',
-    'Owner'
-];
+import { serverUtils } from '../utils/ServerUtils';
 
 export async function handleTicketManagement(interaction: ButtonInteraction) {
-    if (!interaction.guild || !interaction.channel || !('name' in interaction.channel)) {
-        console.log('[TicketManagement] Missing guild or channel:', {
-            hasGuild: !!interaction.guild,
-            hasChannel: !!interaction.channel,
-            channelType: interaction.channel?.type
-        });
-        return;
-    }
-
-    const channelName = interaction.channel.name;
-    const buttonId = interaction.customId;
-
-    // Only check for ticket channel if it's a management button
-    const isManagementButton = ['ticket_claim', 'ticket_close', 'ticket_manage_users'].includes(buttonId);
-    
-    if (isManagementButton && !channelName?.startsWith('ticket-')) {
-        console.log('[TicketManagement] Management command used in non-ticket channel:', {
-            channelName,
-            buttonId
-        });
-        await interaction.reply({
-            content: '❌ Ticket management commands can only be used in ticket channels.',
-            ephemeral: true
-        });
-        return;
-    }
-
-    // If it's a ticket creation button, let it through to the TicketButtonHandler
-    if (buttonId.startsWith('ticket_') && ['general', 'staff', 'buycraft', 'punishments'].some(type => buttonId === `ticket_${type}`)) {
-        return;
-    }
-
-    console.log('[TicketManagement] Looking up ticket for channel:', {
-        channelId: interaction.channel.id,
-        channelName: interaction.channel.name,
-        guildId: interaction.guild.id,
-        guildName: interaction.guild.name
-    });
-
-    const ticket = await ticketService.getTicketByChannel(interaction.channel.id);
-    
-    console.log('[TicketManagement] Ticket lookup result:', {
-        found: !!ticket,
-        ticketDetails: ticket ? {
-            id: ticket._id?.toString(),
-            userId: ticket.userId,
-            status: ticket.status,
-            category: ticket.category,
-            channelId: ticket.channelId
-        } : null
-    });
-
-    if (!ticket) {
-        console.log('[TicketManagement] No ticket found, sending error message');
-        await interaction.reply({
-            content: '❌ Could not find ticket information for this channel.',
-            ephemeral: true
-        });
-        return;
-    }
-
-    switch (buttonId) {
-        case 'ticket_claim':
-            await handleClaim(interaction, ticket._id!);
-            break;
-        case 'ticket_close':
-            await handleClose(interaction, ticket);
-            break;
-        case 'ticket_manage_users':
-            await handleManageUsers(interaction, ticket._id!);
-            break;
-    }
-}
-
-async function handleClaim(interaction: ButtonInteraction, ticketId: ObjectId) {
-    if (!interaction.member || !interaction.guild) return;
-    const member = interaction.member as GuildMember;
-
-    // Check if user has staff role
-    const hasStaffRole = member.roles.cache.some(role => 
-        ADMIN_ROLES.includes(role.name)
-    );
-
-    if (!hasStaffRole) {
-        await interaction.reply({
-            content: '❌ You do not have permission to claim tickets.',
-            ephemeral: true
-        });
-        return;
-    }
-
-    const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
-    if (!ticket) return;
-
-    if (ticket.claimedBy) {
-        if (ticket.claimedBy === interaction.user.id) {
-            // Unclaim the ticket
-            await ticketService.unclaimTicket(ticketId);
-            await interaction.reply({
-                content: `✅ Ticket unclaimed by ${interaction.user}`,
+    try {
+        const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
+        if (!ticket) {
+            await interaction.reply({ 
+                content: '❌ Ticket not found', 
+                flags: 1 << 6 
             });
-
-            // Create new action row with updated button
-            const row = new ActionRowBuilder<ButtonBuilder>()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('ticket_claim')
-                        .setLabel('Claim')
-                        .setStyle(ButtonStyle.Success)
-                        .setEmoji('🎫'),
-                    new ButtonBuilder()
-                        .setCustomId('ticket_close')
-                        .setLabel('Close')
-                        .setStyle(ButtonStyle.Danger)
-                        .setEmoji('🔒'),
-                    new ButtonBuilder()
-                        .setCustomId('ticket_manage_users')
-                        .setLabel('Manage Users')
-                        .setStyle(ButtonStyle.Secondary)
-                        .setEmoji('👥')
-                );
-
-            await interaction.message.edit({ components: [row] });
-        } else {
-            await interaction.reply({
-                content: `❌ This ticket is already claimed by <@${ticket.claimedBy}>`,
-                ephemeral: true
-            });
+            return;
         }
-        return;
-    }
 
-    // Claim the ticket
-    await ticketService.claimTicket(ticketId, interaction.user.id);
-    await interaction.reply({
-        content: `✅ Ticket claimed by ${interaction.user}`,
-    });
+        // Set server type based on guild ID
+        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
 
-    // Create new action row with updated button
-    const row = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('ticket_claim')
-                .setLabel('Claim')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('🎫'),
-            new ButtonBuilder()
-                .setCustomId('ticket_close')
-                .setLabel('Close')
-                .setStyle(ButtonStyle.Danger)
-                .setEmoji('🔒'),
-            new ButtonBuilder()
-                .setCustomId('ticket_manage_users')
-                .setLabel('Manage Users')
-                .setStyle(ButtonStyle.Secondary)
-                .setEmoji('👥')
-        );
+        // Check if user has staff role
+        if (!(interaction.member instanceof GuildMember) || !serverUtils.hasStaffRole(interaction.member)) {
+            await interaction.reply({
+                content: '❌ You do not have permission to manage tickets',
+                flags: 1 << 6
+            });
+            return;
+        }
 
-    await interaction.message.edit({ components: [row] });
-}
+        switch (interaction.customId) {
+            case 'ticket_claim':
+                // Check if ticket is already claimed
+                if (ticket.claimedBy) {
+                    // If claimed by someone else, only managers can take over
+                    if (ticket.claimedBy !== interaction.user.id && !serverUtils.hasManagerRole(interaction.member)) {
+                        await interaction.reply({
+                            content: '❌ This ticket is already claimed by someone else',
+                            flags: 1 << 6
+                        });
+                        return;
+                    }
+                    // If claimed by the same person, unclaim it
+                    if (ticket.claimedBy === interaction.user.id) {
+                        await ticketService.unclaimTicket(ticket._id!);
+                        const unclaimEmbed = new EmbedBuilder()
+                            .setColor(serverUtils.getColor('warning'))
+                            .setDescription(`🔓 <@${interaction.user.id}> has unclaimed this ticket.`)
+                            .setFooter(serverUtils.getFooter());
 
-async function handleClose(interaction: ButtonInteraction, ticket: any) {
-    if (!interaction.member || !interaction.guild) return;
-    const member = interaction.member as GuildMember;
+                        await interaction.reply({
+                            embeds: [unclaimEmbed]
+                        });
+                        return;
+                    }
+                }
 
-    // Check if user has permission to close
-    const canClose = member.roles.cache.some(role => ADMIN_ROLES.includes(role.name)) ||
-                    ticket.claimedBy === interaction.user.id ||
-                    ticket.userId === interaction.user.id;
+                // Claim the ticket
+                await ticketService.claimTicket(ticket._id!, interaction.user.id);
+                const claimEmbed = new EmbedBuilder()
+                    .setColor(serverUtils.getColor('success'))
+                    .setDescription(`✅ <@${interaction.user.id}> has claimed this ticket.`)
+                    .setFooter(serverUtils.getFooter());
 
-    if (!canClose) {
-        await interaction.reply({
-            content: '❌ You do not have permission to close this ticket.',
-            flags: 1 << 6
-        });
-        return;
-    }
-
-    // Check if ticket is claimed
-    const isUnclaimed = !ticket.claimedBy;
-    
-    const row = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('ticket_close_confirm')
-                .setLabel('Yes')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('ticket_close_cancel')
-                .setLabel('No')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-    const warningEmbed = new EmbedBuilder()
-        .setColor('#FFA500')
-        .setDescription('🔒 Are you sure you want to close this ticket?\n\n' +
-            (isUnclaimed ? 
-            "The ticket hasn't been claimed by anyone yet, so no one will get a review from it.\n" +
-            "You can claim this ticket before closing it to get a review from the ticket author. If " +
-            "you want to close the ticket without claiming it, you can use the button below."
-            : "This action cannot be undone."));
-
-    await interaction.reply({
-        embeds: [warningEmbed],
-        components: [row],
-        flags: 1 << 6
-    });
-}
-
-async function handleManageUsers(interaction: ButtonInteraction, ticketId: ObjectId) {
-    if (!interaction.member || !interaction.guild) return;
-    const member = interaction.member as GuildMember;
-
-    const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
-    if (!ticket) return;
-
-    // Check if user has permission to manage users
-    const canManage = member.roles.cache.some(role => ADMIN_ROLES.includes(role.name)) ||
-                     ticket.claimedBy === interaction.user.id;
-
-    if (!canManage) {
-        await interaction.reply({
-            content: '❌ You do not have permission to manage users in this ticket.',
-            ephemeral: true
-        });
-        return;
-    }
-
-    const row = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('ticket_add_user')
-                .setLabel('Add User')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('ticket_remove_user')
-                .setLabel('Remove User')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-    await interaction.reply({
-        content: 'What would you like to do?',
-        components: [row],
-        ephemeral: true
-    });
-}
-
-export async function handleUserManagement(interaction: ButtonInteraction) {
-    if (!interaction.guild) return;
-
-    const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
-    if (!ticket) return;
-
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId(`ticket_${interaction.customId === 'ticket_add_user' ? 'add' : 'remove'}_user_select`)
-        .setPlaceholder('Select a user')
-        .setMaxValues(1);
-
-    if (interaction.customId === 'ticket_add_user') {
-        // Add all guild members to the select menu
-        const members = await interaction.guild.members.fetch();
-        members.forEach(member => {
-            if (!ticket.additionalUsers.includes(member.id) && 
-                member.id !== ticket.userId && 
-                member.id !== ticket.claimedBy) {
-                selectMenu.addOptions({
-                    label: member.user.tag,
-                    value: member.id
+                await interaction.reply({
+                    embeds: [claimEmbed]
                 });
-            }
-        });
-    } else {
-        // Add only additional users to the select menu
-        for (const userId of ticket.additionalUsers) {
-            const member = await interaction.guild.members.fetch(userId);
-            selectMenu.addOptions({
-                label: member.user.tag,
-                value: member.id
-            });
+                break;
+
+            case 'ticket_close':
+                // Check if ticket is claimed
+                const isUnclaimed = !ticket.claimedBy;
+                
+                const row = new ActionRowBuilder<ButtonBuilder>()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('ticket_close_with_rating')
+                            .setLabel('Close with Rating')
+                            .setStyle(ButtonStyle.Success),
+                        new ButtonBuilder()
+                            .setCustomId('ticket_close_no_rating')
+                            .setLabel('Close without Rating')
+                            .setStyle(ButtonStyle.Secondary),
+                        new ButtonBuilder()
+                            .setCustomId('ticket_close_cancel')
+                            .setLabel('Cancel')
+                            .setStyle(ButtonStyle.Danger)
+                    );
+
+                const warningEmbed = new EmbedBuilder()
+                    .setColor(serverUtils.getColor('warning'))
+                    .setDescription('🔒 How would you like to close this ticket?\n\n' +
+                        (isUnclaimed ? 
+                        "⚠️ The ticket hasn't been claimed by anyone yet, so no one will get a review from it.\n" +
+                        "You can claim this ticket before closing it to get a review from the ticket author."
+                        : "✨ Closing with rating will ask the ticket creator to rate their experience.\n" +
+                        "❌ Closing without rating will close the ticket immediately."))
+                    .setFooter(serverUtils.getFooter());
+
+                await interaction.reply({
+                    embeds: [warningEmbed],
+                    components: [row],
+                    flags: 1 << 6
+                });
+                break;
+
+            // ... rest of the cases
         }
-    }
-
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
-        .addComponents(selectMenu);
-
-    await interaction.reply({
-        content: `Select a user to ${interaction.customId === 'ticket_add_user' ? 'add to' : 'remove from'} the ticket:`,
-        components: [row],
-        ephemeral: true
-    });
-}
-
-export async function handleUserSelect(interaction: StringSelectMenuInteraction) {
-    if (!interaction.guild || !interaction.channel) return;
-
-    const ticket = await ticketService.getTicketByChannel(interaction.channel.id);
-    if (!ticket) return;
-
-    const userId = interaction.values[0];
-    const isAdding = interaction.customId === 'ticket_add_user_select';
-
-    if (isAdding) {
-        await ticketService.addUserToTicket(ticket._id!, userId);
-        await (interaction.channel as TextChannel).permissionOverwrites.create(userId, {
-            ViewChannel: true,
-            SendMessages: true,
-            ReadMessageHistory: true
+    } catch (error) {
+        console.error('[ERROR] Ticket management error:', error);
+        await interaction.reply({ 
+            content: '❌ An error occurred', 
+            flags: 1 << 6 
         });
-    } else {
-        await ticketService.removeUserFromTicket(ticket._id!, userId);
-        await (interaction.channel as TextChannel).permissionOverwrites.delete(userId);
     }
-
-    const member = await interaction.guild.members.fetch(userId);
-    await interaction.reply({
-        content: `✅ Successfully ${isAdding ? 'added' : 'removed'} ${member.user.tag} ${isAdding ? 'to' : 'from'} the ticket.`,
-        ephemeral: true
-    });
-
-    // Send public message in ticket
-    await interaction.channel.send({
-        content: `${interaction.user} has ${isAdding ? 'added' : 'removed'} ${member.user} ${isAdding ? 'to' : 'from'} the ticket.`
-    });
 }
 
 export async function handleCloseConfirmation(interaction: ButtonInteraction) {
@@ -371,10 +148,54 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
             return;
         }
 
+        // Set server type based on guild ID
+        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
+
         switch (interaction.customId) {
-            case 'ticket_close_confirm':
+            case 'ticket_close_with_rating':
+                if (interaction.channel instanceof TextChannel) {
+                    // Ask for rating
+                    const ratingEmbed = new EmbedBuilder()
+                        .setColor(serverUtils.getColor('primary'))
+                        .setTitle('⭐ Rate Your Experience')
+                        .setDescription(`<@${ticket.userId}>, please rate your experience with this ticket:`)
+                        .setFooter(serverUtils.getFooter());
+
+                    const ratingRow = new ActionRowBuilder<ButtonBuilder>()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('ticket_rate_5')
+                                .setLabel('⭐⭐⭐⭐⭐')
+                                .setStyle(ButtonStyle.Success),
+                            new ButtonBuilder()
+                                .setCustomId('ticket_rate_4')
+                                .setLabel('⭐⭐⭐⭐')
+                                .setStyle(ButtonStyle.Success),
+                            new ButtonBuilder()
+                                .setCustomId('ticket_rate_3')
+                                .setLabel('⭐⭐⭐')
+                                .setStyle(ButtonStyle.Primary),
+                            new ButtonBuilder()
+                                .setCustomId('ticket_rate_2')
+                                .setLabel('⭐⭐')
+                                .setStyle(ButtonStyle.Secondary),
+                            new ButtonBuilder()
+                                .setCustomId('ticket_rate_1')
+                                .setLabel('⭐')
+                                .setStyle(ButtonStyle.Danger)
+                        );
+
+                    await interaction.reply({
+                        embeds: [ratingEmbed],
+                        components: [ratingRow],
+                        flags: 1 << 6
+                    });
+                }
+                break;
+
+            case 'ticket_close_no_rating':
                 await interaction.reply({ 
-                    content: 'Closing ticket...',
+                    content: 'Closing ticket without rating...',
                     flags: 1 << 6 
                 });
 
@@ -391,8 +212,9 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
                     
                     // Send closing message and delete channel
                     const closingEmbed = new EmbedBuilder()
-                        .setColor('#2f3136')
-                        .setDescription('🔒 The ticket has been closed!\nThis channel will be deleted in 5 seconds.');
+                        .setColor(serverUtils.getColor('primary'))
+                        .setDescription('🔒 The ticket has been closed!\nThis channel will be deleted in 5 seconds.')
+                        .setFooter(serverUtils.getFooter());
 
                     await interaction.channel.send({
                         embeds: [closingEmbed]
@@ -412,31 +234,6 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
                     content: 'The ticket will not be closed.',
                     flags: 1 << 6 
                 });
-                break;
-
-            case 'ticket_close_rating':
-                await interaction.reply({ 
-                    content: '⭐ Please rate your experience:', 
-                    flags: 1 << 6 
-                });
-                if (interaction.channel instanceof TextChannel) {
-                    await interaction.channel.send({
-                        content: `<@${ticket.userId}>, please rate your experience:`,
-                        components: [
-                            new ActionRowBuilder<ButtonBuilder>()
-                                .addComponents(
-                                    new ButtonBuilder()
-                                        .setCustomId('ticket_rate_good')
-                                        .setLabel('👍 Good')
-                                        .setStyle(ButtonStyle.Success),
-                                    new ButtonBuilder()
-                                        .setCustomId('ticket_rate_bad')
-                                        .setLabel('👎 Bad')
-                                        .setStyle(ButtonStyle.Danger)
-                                )
-                        ]
-                    });
-                }
                 break;
         }
     } catch (error) {
@@ -459,6 +256,9 @@ export async function handleRating(interaction: ButtonInteraction) {
             return;
         }
 
+        // Set server type based on guild ID
+        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
+
         // Only allow the ticket creator to rate
         if (interaction.user.id !== ticket.userId) {
             await interaction.reply({ 
@@ -468,10 +268,58 @@ export async function handleRating(interaction: ButtonInteraction) {
             return;
         }
 
-        const rating = interaction.customId === 'ticket_rate_good' ? 'good' : 'bad';
+        // Extract rating from button ID (e.g., ticket_rate_5 -> 5)
+        const rating = parseInt(interaction.customId.split('_').pop() || '0');
+        
+        // Create feedback modal
+        const modal = new ModalBuilder()
+            .setCustomId(`ticket_feedback_${rating}`)
+            .setTitle('Ticket Feedback');
+
+        const feedbackInput = new TextInputBuilder()
+            .setCustomId('feedback')
+            .setLabel('Would you like to add any feedback? (Optional)')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Enter your feedback here...')
+            .setRequired(false)
+            .setMaxLength(1000);
+
+        const actionRow = new ActionRowBuilder<TextInputBuilder>()
+            .addComponents(feedbackInput);
+
+        modal.addComponents(actionRow);
+
+        await interaction.showModal(modal);
+
+    } catch (error) {
+        console.error('[ERROR]', error);
+        await interaction.reply({ 
+            content: '❌ An error occurred', 
+            flags: 1 << 6 
+        });
+    }
+}
+
+export async function handleFeedback(interaction: ModalSubmitInteraction) {
+    try {
+        const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
+        if (!ticket) {
+            await interaction.reply({ 
+                content: '❌ Ticket not found', 
+                flags: 1 << 6 
+            });
+            return;
+        }
+
+        // Set server type based on guild ID
+        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
+
+        // Extract rating from modal ID (e.g., ticket_feedback_5 -> 5)
+        const rating = parseInt(interaction.customId.split('_').pop() || '0');
+        const feedback = interaction.fields.getTextInputValue('feedback');
         
         await interaction.reply({ 
-            content: `Thank you for your ${rating} rating! Closing ticket...`, 
+            content: `Thank you for your ${rating}-star rating${feedback ? ' and feedback' : ''}! Closing ticket...`, 
             flags: 1 << 6 
         });
         
@@ -481,16 +329,17 @@ export async function handleRating(interaction: ButtonInteraction) {
                 interaction.channel,
                 interaction.user.id,
                 ticket,
-                `Closed with ${rating} rating`
+                `Closed with ${rating}-star rating`
             );
             
-            // Close the ticket
-            await ticketService.closeTicket(ticket._id!, 'rated');
+            // Close the ticket with rating and feedback
+            await ticketService.closeTicket(ticket._id!, 'rated', rating, feedback || undefined);
             
             // Send closing message and delete after delay
             const closingEmbed = new EmbedBuilder()
-                .setColor('#2f3136')
-                .setDescription('🔒 The ticket has been closed!\nThis channel will be deleted in 5 seconds.');
+                .setColor(serverUtils.getColor('primary'))
+                .setDescription('🔒 The ticket has been closed!\nThis channel will be deleted in 5 seconds.')
+                .setFooter(serverUtils.getFooter());
 
             await interaction.channel.send({
                 embeds: [closingEmbed]

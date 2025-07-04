@@ -3,6 +3,7 @@ import { Guild, GuildMember, TextChannel, User, ChannelType, PermissionFlagsBits
 import type { GuildBasedChannel } from 'discord.js';
 import { mongoService } from './MongoService';
 import { TicketModel, TicketCategory, type TicketMetadata, type Ticket } from '../models/Ticket';
+import { serverUtils } from '../utils/ServerUtils';
 
 interface CreateTicketParams {
     userId: string;
@@ -48,6 +49,9 @@ export class TicketService {
         const member = await guild.members.fetch(ticket.userId!);
         if (!member) throw new Error('Member not found');
 
+        // Set server type based on guild ID
+        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(guild.id));
+
         // Create under "Tickets" category
         const categoryChannel = guild.channels.cache.find(
             (c: GuildBasedChannel) => c.type === ChannelType.GuildCategory && 
@@ -58,30 +62,46 @@ export class TicketService {
             throw new Error('Category channel "Tickets" not found. Please create this category in Discord.');
         }
 
+        // Get staff roles
+        const staffRoles = serverUtils.getRoles().staff;
+        const staffRoleIds = await Promise.all(
+            staffRoles.map(async (roleName) => {
+                const role = guild.roles.cache.find(r => r.name === roleName);
+                return role?.id;
+            })
+        ).then(ids => ids.filter((id): id is string => id !== undefined));
+
+        // Create permission overwrites for all staff roles
+        const permissionOverwrites = [
+            {
+                id: guild.id,
+                deny: [PermissionFlagsBits.ViewChannel]
+            },
+            {
+                id: member.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+            },
+            {
+                id: this.client.user!.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels]
+            },
+            ...staffRoleIds.map(roleId => ({
+                id: roleId,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+            }))
+        ];
+
         // Create the channel
         const channel = await guild.channels.create({
             name: `ticket-${ticket.ticketNumber}`,
             type: ChannelType.GuildText,
             parent: categoryChannel.id,
-            permissionOverwrites: [
-                {
-                    id: guild.id,
-                    deny: [PermissionFlagsBits.ViewChannel]
-                },
-                {
-                    id: member.id,
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
-                },
-                {
-                    id: this.client.user!.id,
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels]
-                }
-            ]
+            permissionOverwrites
         });
 
         // Create ticket information embed
         const embed = new EmbedBuilder()
-            .setColor('#36393F')
+            .setColor(serverUtils.getColor('primary'))
             .setTitle('SUPPORT TICKET')
             .setDescription(
                 `Welcome <@${ticket.userId}> to our staff support ticket.\n` +
@@ -128,11 +148,13 @@ export class TicketService {
         }
 
         // Add support website link
+        const info = serverUtils.getInfo();
         embed.addFields({
             name: 'For more support, you can visit our website',
-            value: 'https://placeholder.com/staff-support',
+            value: info.website,
             inline: false
-        });
+        })
+        .setFooter(serverUtils.getFooter());
 
         // Create ticket management buttons
         const row = new ActionRowBuilder<ButtonBuilder>()
@@ -141,7 +163,7 @@ export class TicketService {
                     .setCustomId('ticket_claim')
                     .setLabel('Claim')
                     .setStyle(ButtonStyle.Success)
-                    .setEmoji('🎫'),
+                    .setEmoji('✅'),
                 new ButtonBuilder()
                     .setCustomId('ticket_close')
                     .setLabel('Close')
@@ -295,7 +317,7 @@ export class TicketService {
         );
     }
 
-    async closeTicket(ticketId: ObjectId, status: string): Promise<void> {
+    async closeTicket(ticketId: ObjectId, status: string, rating?: number, feedback?: string): Promise<void> {
         this.checkInitialized();
         await TicketModel.updateOne(
             { _id: ticketId },
@@ -303,7 +325,14 @@ export class TicketService {
                 $set: {
                     status: 'CLOSED',
                     closedAt: new Date(),
-                    updatedAt: new Date()
+                    updatedAt: new Date(),
+                    ...(rating !== undefined ? {
+                        rating: {
+                            stars: rating,
+                            feedback: feedback || undefined,
+                            givenAt: new Date()
+                        }
+                    } : {})
                 }
             }
         );

@@ -17,15 +17,14 @@ import { CommandLoaderService } from './services/CommandLoaderService';
 import { handleTicketButton } from './handlers/TicketButtonHandler';
 import { handleModal as handleTicketModal } from './handlers/TicketModalHandler';
 import { 
-    handleTicketManagement, 
-    handleUserManagement, 
-    handleUserSelect, 
+    handleTicketManagement,
     handleCloseConfirmation,
     handleRating 
 } from './handlers/TicketManagementHandler';
 import { mongoService } from './services/MongoService';
 import { ticketService } from './services/TicketService';
 import { transcriptService } from './services/TranscriptService';
+import { serverUtils } from './utils/ServerUtils';
 
 // Create Discord client
 const client = new Client({
@@ -118,10 +117,6 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             else if (customId.startsWith('ticket_')) {
                 await handleTicketManagement(interaction);
             }
-            // Handle user management buttons
-            else if (customId.startsWith('user_')) {
-                await handleUserManagement(interaction);
-            }
         }
         else if (interaction.isModalSubmit()) {
             if (interaction.customId.startsWith('ticket-')) {
@@ -129,9 +124,8 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             }
         }
         else if (interaction.isStringSelectMenu()) {
-            if (interaction.customId === 'user_select') {
-                await handleUserSelect(interaction);
-            }
+            // Handle any select menu interactions here if needed
+            console.log('[DEBUG] Select menu interaction:', interaction.customId);
         }
     } catch (error) {
         console.error('Error handling interaction:', error);
@@ -158,6 +152,9 @@ client.on(Events.GuildMemberRemove, async (member) => {
             return;
         }
 
+        // Set server type based on guild ID
+        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(member.guild.id));
+
         // Find all open tickets by this user
         const tickets = await ticketService.getUserTickets(member.id, member.guild.id, ['OPEN', 'RATING']);
 
@@ -165,9 +162,10 @@ client.on(Events.GuildMemberRemove, async (member) => {
             const channel = member.guild.channels.cache.get(ticket.channelId);
             if (channel?.isTextBased() && channel instanceof TextChannel) {
                 const embed = new EmbedBuilder()
-                    .setColor('#ff0000')
-                    .setTitle('User Left')
-                    .setDescription(`The ticket creator (${member.user.tag}) has left the server.`)
+                    .setColor(serverUtils.getColor('error'))
+                    .setTitle('The Ticket author has left the server!')
+                    .setDescription(`This ticket will be closed automatically due to the author leaving the server. However, the channel was not deleted automatically to prevent destructive action. This channel **can be deleted at any time by any staff member using the button below.**`)
+                    .setFooter(serverUtils.getFooter())
                     .setTimestamp();
 
                 await channel.send({ embeds: [embed] });
