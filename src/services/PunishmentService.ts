@@ -1,6 +1,7 @@
 import { GuildMember, Client, EmbedBuilder, TextChannel } from 'discord.js';
 import { checkActivePunishments } from '../utils/minecraftUtils';
 import { mongoService } from './MongoService';
+import { redisService } from './RedisService';
 import { config } from '../config/config';
 import type { Document } from 'mongodb';
 
@@ -37,6 +38,24 @@ class PunishmentService {
             throw new Error('PunishmentService not initialized');
         }
         return PunishmentService.instance;
+    }
+
+    /**
+     * Check if a user has been notified about a specific punishment
+     */
+    private async hasBeenNotified(discordId: string, type: 'ban' | 'mute' | 'blacklist', addedAt: number): Promise<boolean> {
+        const key = `punishment:notification:${discordId}:${type}:${addedAt}`;
+        const notified = await redisService.getSyncCode(key);
+        return !!notified;
+    }
+
+    /**
+     * Mark a user as notified about a specific punishment
+     */
+    private async markAsNotified(discordId: string, type: 'ban' | 'mute' | 'blacklist', addedAt: number): Promise<void> {
+        const key = `punishment:notification:${discordId}:${type}:${addedAt}`;
+        // Store for 30 days - if a punishment lasts longer, we might notify again after this
+        await redisService.storeSyncCode(key, '1');
     }
 
     /**
@@ -110,9 +129,17 @@ class PunishmentService {
         member: GuildMember,
         type: 'ban' | 'mute' | 'blacklist',
         reason: string,
+        addedAt: number,
         expiryTimestamp?: number
     ) {
         try {
+            // Check if we've already notified about this punishment
+            const alreadyNotified = await this.hasBeenNotified(member.id, type, addedAt);
+            if (alreadyNotified) {
+                console.log(`[PunishmentService] User ${member.user.tag} already notified about ${type}`);
+                return;
+            }
+
             const embed = new EmbedBuilder()
                 .setColor('#FF0000')
                 .setTitle('⚠️ Account Punishment Detected')
@@ -139,9 +166,9 @@ class PunishmentService {
                 });
             }
 
-            await member.send({ embeds: [embed] }).catch(error => {
-                console.error(`[PunishmentService] Failed to send DM to ${member.user.tag}:`, error);
-            });
+            await member.send({ embeds: [embed] });
+            // Mark as notified only if DM was successful
+            await this.markAsNotified(member.id, type, addedAt);
         } catch (error) {
             console.error(`[PunishmentService] Error sending punishment DM to ${member.user.tag}:`, error);
         }
@@ -271,24 +298,27 @@ class PunishmentService {
 
                 // Send DM if this is a new punishment (they previously had verified role)
                 if (hadVerifiedRole) {
+                    const activePunishment = punishments.isBlacklisted 
+                        ? { type: 'blacklist' as const, reason: punishments.blacklistReason!, expiry: punishments.blacklistExpiry }
+                        : { type: 'ban' as const, reason: punishments.banReason!, expiry: punishments.banExpiry };
+
                     await this.sendPunishmentDM(
                         member,
-                        punishments.isBlacklisted ? 'blacklist' : 'ban',
-                        punishments.isBlacklisted ? punishments.blacklistReason! : punishments.banReason!,
-                        punishments.isBlacklisted ? punishments.blacklistExpiry : punishments.banExpiry
+                        activePunishment.type,
+                        activePunishment.reason,
+                        Date.now(), // Current time as addedAt since we don't have the exact time
+                        activePunishment.expiry
                     );
-                }
 
-                if (wasUpdated) {
-                    await this.sendPunishmentLog(
-                        member,
-                        uuid,
-                        punishments.isBlacklisted ? 'blacklist' : 'ban',
-                        punishments.isBlacklisted ? punishments.blacklistReason : punishments.banReason,
-                        punishments.isBlacklisted ? 
-                            (punishments.blacklistExpiry ? Math.floor(punishments.blacklistExpiry / 1000) : undefined) :
-                            (punishments.banExpiry ? Math.floor(punishments.banExpiry / 1000) : undefined)
-                    );
+                    if (wasUpdated) {
+                        await this.sendPunishmentLog(
+                            member,
+                            uuid,
+                            activePunishment.type,
+                            activePunishment.reason,
+                            activePunishment.expiry ? Math.floor(activePunishment.expiry / 1000) : undefined
+                        );
+                    }
                 }
             } else {
                 console.log(`[PunishmentService] User ${member.user.tag} is not banned/blacklisted`);
@@ -326,6 +356,7 @@ class PunishmentService {
                         member,
                         'mute',
                         punishments.muteReason!,
+                        Date.now(), // Current time as addedAt since we don't have the exact time
                         punishments.muteExpiry
                     );
                 }
