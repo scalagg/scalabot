@@ -17,7 +17,8 @@ import {
 import type { InteractionReplyOptions } from 'discord.js';
 import { redisService } from '../services/RedisService';
 import { mongoService } from '../services/MongoService';
-import fetch from 'node-fetch';
+import { getMinecraftUsername } from '../utils/minecraftUtils';
+import { PunishmentService } from '../services/PunishmentService';
 
 interface DiscordProfile {
     _id: string;
@@ -36,20 +37,6 @@ interface MojangProfile {
         name: string;
         value: string;
     }>;
-}
-
-async function getMinecraftUsername(uuid: string): Promise<string> {
-    try {
-        const response = await fetch(`https://sessionserver.mojang.com/session/minecraft/profile/${uuid}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch Minecraft username');
-        }
-        const data = await response.json() as MojangProfile;
-        return data.name;
-    } catch (error) {
-        console.error('[DiscordBot] [ERROR] Failed to fetch Minecraft username:', error);
-        throw error;
-    }
 }
 
 export const data = new SlashCommandBuilder()
@@ -177,6 +164,21 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
 
         console.log('[DiscordBot] [DEBUG] Valid code found for UUID:', uuid);
         
+        // Check if user can verify
+        const punishmentService = PunishmentService.getInstance();
+        const verificationStatus = await punishmentService.canVerify(uuid);
+        if (!verificationStatus.canVerify) {
+            const expiryText = verificationStatus.expiryTimestamp
+                ? `\nYour ban will expire <t:${verificationStatus.expiryTimestamp}:R>`
+                : '\nThis is a permanent ban';
+
+            await interaction.reply({
+                content: `❌ You cannot verify while banned.\nReason: ${verificationStatus.reason}${expiryText}`,
+                flags: 1 << 6
+            });
+            return;
+        }
+
         // Get Minecraft username from UUID
         const minecraftUsername = await getMinecraftUsername(uuid);
         console.log('[DiscordBot] [DEBUG] Fetched Minecraft username:', minecraftUsername);
@@ -197,13 +199,13 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
                 identifier: uuid,
                 lastCachedDiscordUsername: null,
                 notifiedOfSuccessfulLink: false
-            };
+            } as DiscordProfile;
         }
 
         // Update profile
         profile.discordId = interaction.user.id;
         profile.lastCachedDiscordUsername = minecraftUsername;
-        profile.notifiedOfSuccessfulLink = true; // Set to true since we're notifying now
+        profile.notifiedOfSuccessfulLink = true;
 
         console.log('[DiscordBot] [DEBUG] Updating profile in MongoDB:', {
             uuid,
@@ -254,6 +256,9 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
                 await interaction.member.roles.add(verifiedRole);
                 await interaction.member.setNickname(minecraftUsername);
             }
+
+            // Update roles based on punishment status
+            await punishmentService.updateMemberRoles(interaction.member, uuid);
         }
 
         // Send success message
