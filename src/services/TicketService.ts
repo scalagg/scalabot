@@ -1,4 +1,4 @@
-import { ObjectId } from 'mongodb';
+import { ObjectId, WithId, Document } from 'mongodb';
 import { Guild, GuildMember, TextChannel, User, ChannelType, PermissionFlagsBits, Client, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import type { GuildBasedChannel } from 'discord.js';
 import { mongoService } from './MongoService';
@@ -288,33 +288,116 @@ export class TicketService {
     }
 
     async claimTicket(ticketId: ObjectId, staffMemberId: string): Promise<void> {
-        this.checkInitialized();
+        // Get the ticket first to get the channel ID
+        const ticket = await TicketModel.findById(ticketId);
+        if (!ticket) {
+            throw new Error('Ticket not found');
+        }
+
+        // Update ticket in database
         await TicketModel.updateOne(
             { _id: ticketId },
-            {
-                $set: {
+            { 
+                $set: { 
                     claimedBy: staffMemberId,
-                    claimedAt: new Date(),
-                    updatedAt: new Date()
-                }
+                    claimedAt: new Date()
+                } 
             }
         );
+
+        // Get the channel
+        const channel = await this.client.channels.fetch(ticket.channelId) as TextChannel;
+        if (!channel) {
+            throw new Error('Channel not found');
+        }
+
+        // Get the guild
+        const guild = channel.guild;
+        
+        // Set server type based on guild ID
+        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(guild.id));
+
+        // Get staff roles
+        const staffRoles = serverUtils.getRoles().staff;
+        const adminRoles = serverUtils.getRoles().admin;
+
+        // Update permissions for all staff roles
+        for (const roleName of staffRoles) {
+            const role = guild.roles.cache.find(r => r.name === roleName);
+            if (role) {
+                // If it's an admin role or higher, keep write permissions
+                if (adminRoles.includes(roleName)) {
+                    await channel.permissionOverwrites.edit(role, {
+                        ViewChannel: true,
+                        SendMessages: true
+                    });
+                } else {
+                    // For other staff roles, remove write permissions
+                    await channel.permissionOverwrites.edit(role, {
+                        ViewChannel: true,
+                        SendMessages: false
+                    });
+                }
+            }
+        }
+
+        // Add write permission for the claiming staff member
+        const staffMember = await guild.members.fetch(staffMemberId);
+        await channel.permissionOverwrites.edit(staffMember, {
+            ViewChannel: true,
+            SendMessages: true
+        });
     }
 
     async unclaimTicket(ticketId: ObjectId): Promise<void> {
-        this.checkInitialized();
+        // Get the ticket first to get the channel ID
+        const ticket = await TicketModel.findById(ticketId);
+        if (!ticket) {
+            throw new Error('Ticket not found');
+        }
+
+        // Update ticket in database
         await TicketModel.updateOne(
             { _id: ticketId },
-            {
-                $unset: {
-                    claimedBy: 1,
-                    claimedAt: 1
-                },
-                $set: {
-                    updatedAt: new Date()
-                }
+            { 
+                $unset: { 
+                    claimedBy: "",
+                    claimedAt: ""
+                } 
             }
         );
+
+        // Get the channel
+        const channel = await this.client.channels.fetch(ticket.channelId) as TextChannel;
+        if (!channel) {
+            throw new Error('Channel not found');
+        }
+
+        // Get the guild
+        const guild = channel.guild;
+        
+        // Set server type based on guild ID
+        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(guild.id));
+
+        // Get staff roles
+        const staffRoles = serverUtils.getRoles().staff;
+
+        // Restore write permissions for all staff roles
+        for (const roleName of staffRoles) {
+            const role = guild.roles.cache.find(r => r.name === roleName);
+            if (role) {
+                await channel.permissionOverwrites.edit(role, {
+                    ViewChannel: true,
+                    SendMessages: true
+                });
+            }
+        }
+
+        // If there was a claimer, remove their specific permission overwrite
+        if (ticket.claimedBy) {
+            const staffMember = await guild.members.fetch(ticket.claimedBy);
+            await channel.permissionOverwrites.delete(staffMember);
+        }
     }
 
     async closeTicket(ticketId: ObjectId, status: string, rating?: number, feedback?: string): Promise<void> {

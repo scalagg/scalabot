@@ -78,12 +78,15 @@ export async function handleTicketManagement(interaction: ButtonInteraction) {
                 // Claim the ticket
                 await ticketService.claimTicket(ticket._id!, interaction.user.id);
                 const claimEmbed = new EmbedBuilder()
+                    .setTitle(':pushpin: This ticket has been claimed.')
                     .setColor(serverUtils.getColor('success'))
-                    .setDescription(`✅ <@${interaction.user.id}> has claimed this ticket.`)
+                    .setDescription(`✅ <@${interaction.user.id}> has claimed your ticket, they will be helping your ticket.`)
                     .setFooter(serverUtils.getFooter());
 
+                    // ping ticket creator and send claim embed
                 await interaction.reply({
-                    embeds: [claimEmbed]
+                    embeds: [claimEmbed],
+                    content: `<@${ticket.userId}>`
                 });
                 break;
 

@@ -193,6 +193,67 @@ class ServerUtils {
     public hasManagerRole(member: GuildMember): boolean {
         return member.roles.cache.some(role => this.getRoles().manager.includes(role.name));
     }
+
+    public hasAdminOrHigherRole(member: GuildMember): boolean {
+        const adminRoles = this.getRoles().admin;
+        return member.roles.cache.some(role => adminRoles.includes(role.name));
+    }
+
+    public canWriteInClaimedTicket(member: GuildMember, claimedByUserId: string | null): boolean {
+        // If not claimed, all staff can write
+        if (!claimedByUserId) return this.hasStaffRole(member);
+
+        // If claimed, only admins and the claimer can write
+        return this.hasAdminOrHigherRole(member) || member.id === claimedByUserId;
+    }
+
+    public getRoleHierarchy(): string[] {
+        return this.serverType === ServerType.SCALA ?
+        // Scala role hierarchy
+        [
+            'Owner',
+            'Co-Owner',
+            'Platform Admin',
+            'System Admin',
+            'Senior Admin',
+            'Admin',
+            'Senior Mod',
+            'Mod+',
+            'Mod',
+            'Trial Mod',
+            'Learner'
+        ] : 
+        // HolyPvP role hierarchy
+        [
+            'Owner',
+            'Manager',
+            'Head Admin',
+            'Senior Admin',
+            'Admin',
+            'Senior Mod',
+            'Mod',
+            'Helper'
+        ];
+    }
+
+    public getRoleLevel(roleName: string): number {
+        const hierarchy = this.getRoleHierarchy();
+        const index = hierarchy.indexOf(roleName);
+        return index === -1 ? -1 : hierarchy.length - index;
+    }
+
+    public getHighestRole(member: GuildMember): string | null {
+        const hierarchy = this.getRoleHierarchy();
+        const memberRoles = member.roles.cache.map(r => r.name);
+        
+        // Find the highest role the member has
+        for (const role of hierarchy) {
+            if (memberRoles.includes(role)) {
+                return role;
+            }
+        }
+        return null;
+    }
 }
 
 export const serverUtils = ServerUtils.getInstance(); 
