@@ -7,7 +7,8 @@ import {
     ModalSubmitInteraction,
     StringSelectMenuInteraction,
     TextChannel,
-    Partials
+    Partials,
+    Message
 } from 'discord.js';
 import type { 
     Interaction,
@@ -30,6 +31,7 @@ import { transcriptService } from './services/TranscriptService';
 import { serverUtils } from './utils/ServerUtils';
 import { PunishmentService } from './services/PunishmentService';
 import { moderationService } from './services/ModerationService';
+import { autoModerationService } from './services/AutoModerationService';
 import { handleButton } from './commands/deployverify';
 
 // Create Discord client
@@ -75,7 +77,11 @@ client.once(Events.ClientReady, async (readyClient) => {
         moderationService.setClient(client);
         console.log('Moderation service initialized');
 
-        // 5. Initialize commands last
+        // 5. Initialize auto-moderation service
+        autoModerationService.setClient(client);
+        console.log('Auto-moderation service initialized');
+
+        // 6. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 
@@ -271,6 +277,37 @@ client.on(Events.GuildMemberRemove, async (member) => {
         }
     } catch (error) {
         console.error('Error handling member remove:', error);
+    }
+});
+
+// Handle message events for auto-moderation
+client.on(Events.MessageCreate, async (message: Message) => {
+    try {
+        // Check if services are initialized
+        if (!isInitialized) {
+            return;
+        }
+
+        // Skip bot messages and DMs
+        if (message.author.bot || !message.guild) {
+            return;
+        }
+
+        // Skip if automoderation is disabled
+        if (!config.geminiConfig.enabled) {
+            return;
+        }
+
+        // Submit message for toxicity analysis
+        autoModerationService.submit(message, async (toxicityScore) => {
+            console.log(`[AutoModeration] Message from ${message.author.tag} scored ${toxicityScore}/100`);
+            
+            // Handle toxic messages
+            await autoModerationService.handleToxicMessage(message, toxicityScore);
+        });
+
+    } catch (error) {
+        console.error('[AutoModeration] Error handling message:', error);
     }
 });
 

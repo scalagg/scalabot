@@ -15,6 +15,13 @@ interface BotConfig {
   redisPort: number;
   redisPassword: string;
   testGuildId?: string; // Optional test guild ID for development
+  gemini?: {
+    apiKey: string;
+    apiEndpoint: string;
+    generativeAIPrompt: string;
+    muteThreshold: number;
+    enabled: boolean;
+  };
   welcomeImage?: {
     backgroundPath?: string;
     guildName?: string;
@@ -117,6 +124,16 @@ class Config {
     return this.config.testGuildId;
   }
 
+  public get geminiConfig() {
+    return this.config.gemini || {
+      apiKey: '',
+      apiEndpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=%s',
+      generativeAIPrompt: 'Analyze the text "%s" and rate its toxicity on a scale of 0 to 100, where 0 represents no toxicity and 100 represents extremely toxic content. Consider harmful language, such as racism, bad words, and harmful phrases, as toxic. However, be cautious with context. For example, if the text contains a question like "Is the n-word bannable?" it should receive a lower toxicity rating because the user is asking a question and not using the word itself. Additionally, if a text includes a single letter like "n", do not automatically assume it refers to a harmful word like "the n-word". Consider the possibility of mistyping; while it should add to the toxicity rating, it should not result in a high toxicity score by default.  Prioritize the severity of the language: hate speech, threats, and harassment should have the highest scores (e.g., 80-100), while general profanity (e.g., \'fuck\') should have a much lower impact (e.g., 10-30) unless used in an aggressive or targeted manner. Words like \'n-word\' (when referring to the term itself) should not be rated as highly toxic unless used with harmful intent. Be mindful of context—questions or discussions about language should have a lower score than direct attacks. Additionally, avoid assuming toxicity from single letters or potential mistypes. Ensure that the toxicity rating accurately reflects intent, distinguishing between casual language and genuinely harmful speech. Output only the rate number.',
+      muteThreshold: 91.0,
+      enabled: false
+    };
+  }
+
   public get welcomeImageConfig() {
     return this.config.welcomeImage || {};
   }
@@ -140,6 +157,7 @@ export const config = {
   get redisPort() { return Config.getInstance().redisPort; },
   get redisPassword() { return Config.getInstance().redisPassword; },
   get testGuildId() { return Config.getInstance().testGuildId; },
+  get geminiConfig() { return Config.getInstance().geminiConfig; },
   get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; },
   get welcomeMessage() { return Config.getInstance().welcomeMessage; }
 } as const; 
