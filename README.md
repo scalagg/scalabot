@@ -59,17 +59,17 @@ bun run index.ts
 
 ## Development Roadmap
 
-### Phase 1: Core Infrastructure (In Progress)
+### Phase 1: Core Infrastructure (Completed)
 - [x] Basic bot setup
 - [x] Redis integration
 - [x] Cross-platform punishment system
 - [x] Ticket system implementation
 
-### Phase 2: Server Management (Planned)
+### Phase 2: Server Management (Completed)
 - [x] Server status monitoring
-- [ ] Player tracking
-- [ ] MOTD display
-- [ ] Performance metrics
+- [x] Player tracking
+- [x] MOTD display
+- [x] Performance metrics
 
 ### Phase 3: Moderation Tools (Planned)
 - [ ] Discord moderation commands
