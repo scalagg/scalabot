@@ -17,7 +17,8 @@ import {
     Message,
     APIButtonComponent,
     MessageActionRowComponentBuilder,
-    ModalSubmitInteraction
+    ModalSubmitInteraction,
+    Interaction
 } from 'discord.js';
 import { ticketService } from '../services/TicketService';
 import { transcriptService } from '../services/TranscriptService';
@@ -25,7 +26,7 @@ import { ObjectId } from 'mongodb';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
 
-export async function handleTicketManagement(interaction: ButtonInteraction) {
+export async function handleTicketManagement(interaction: ButtonInteraction | StringSelectMenuInteraction) {
     try {
         const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
         if (!ticket) {
@@ -48,6 +49,62 @@ export async function handleTicketManagement(interaction: ButtonInteraction) {
             return;
         }
 
+        // Handle select menu interactions
+        if (interaction.isStringSelectMenu()) {
+            switch (interaction.customId) {
+                case 'ticket_add_user_select':
+                    try {
+                        const userId = interaction.values[0];
+                        await ticketService.addUserToTicket(ticket._id!, userId);
+
+                        // Send ephemeral confirmation
+                        await interaction.reply({
+                            content: 'The user was successfully added to the ticket.',
+                            flags: 1 << 6
+                        });
+
+                        // Send public announcement
+                        if (interaction.channel instanceof TextChannel) {
+                            await interaction.channel.send({
+                                content: `<@${userId}> has been added to the ticket.`
+                            });
+                        }
+                    } catch (error) {
+                        await interaction.reply({
+                            content: `❌ Failed to add user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                            flags: 1 << 6
+                        });
+                    }
+                    return;
+
+                case 'ticket_remove_user_select':
+                    try {
+                        const userId = interaction.values[0];
+                        await ticketService.removeUserFromTicket(ticket._id!, userId);
+
+                        // Send ephemeral confirmation
+                        await interaction.reply({
+                            content: 'The user was successfully removed from the ticket.',
+                            flags: 1 << 6
+                        });
+
+                        // Send public announcement
+                        if (interaction.channel instanceof TextChannel) {
+                            await interaction.channel.send({
+                                content: `<@${userId}> has been removed from the ticket.`
+                            });
+                        }
+                    } catch (error) {
+                        await interaction.reply({
+                            content: `❌ Failed to remove user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                            flags: 1 << 6
+                        });
+                    }
+                    return;
+            }
+        }
+
+        // Handle button interactions
         switch (interaction.customId) {
             case 'ticket_claim':
                 // Check if ticket is already claimed
@@ -123,6 +180,138 @@ export async function handleTicketManagement(interaction: ButtonInteraction) {
                 await interaction.reply({
                     embeds: [warningEmbed],
                     components: [row],
+                    flags: 1 << 6
+                });
+                break;
+
+            case 'ticket_manage_users':
+                // Check if user has permission to manage users
+                if (!serverUtils.hasAdminOrHigherRole(interaction.member) && 
+                    ticket.claimedBy !== interaction.user.id) {
+                    await interaction.reply({
+                        content: '❌ Only the staff member who claimed the ticket or administrators can manage users',
+                        flags: 1 << 6
+                    });
+                    return;
+                }
+
+                const manageUsersEmbed = new EmbedBuilder()
+                    .setColor(serverUtils.getColor('primary'))
+                    .setTitle('🔧 What do you want to do?')
+                    .setDescription('You can either add or remove a user from the ticket.')
+                    .setFooter(serverUtils.getFooter());
+
+                const manageUsersRow = new ActionRowBuilder<ButtonBuilder>()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('ticket_add_user')
+                            .setLabel('Add user')
+                            .setStyle(ButtonStyle.Success),
+                        new ButtonBuilder()
+                            .setCustomId('ticket_remove_user')
+                            .setLabel('Remove user')
+                            .setStyle(ButtonStyle.Danger)
+                    );
+
+                await interaction.reply({
+                    embeds: [manageUsersEmbed],
+                    components: [manageUsersRow],
+                    flags: 1 << 6
+                });
+                break;
+
+            case 'ticket_add_user':
+                // Check if user has permission to manage users
+                if (!serverUtils.hasAdminOrHigherRole(interaction.member) && 
+                    ticket.claimedBy !== interaction.user.id) {
+                    await interaction.reply({
+                        content: '❌ Only the staff member who claimed the ticket or administrators can manage users',
+                        flags: 1 << 6
+                    });
+                    return;
+                }
+
+                const availableUsers = await ticketService.getAvailableUsersForTicket(interaction.guildId!, ticket);
+                if (availableUsers.length === 0) {
+                    await interaction.reply({
+                        content: '❌ No users available to add to the ticket',
+                        flags: 1 << 6
+                    });
+                    return;
+                }
+
+                const addUserEmbed = new EmbedBuilder()
+                    .setColor(serverUtils.getColor('primary'))
+                    .setTitle('🔧 Add user')
+                    .setDescription('Please, select the user you want to add to the ticket.')
+                    .setFooter(serverUtils.getFooter());
+
+                const addUserSelect = new ActionRowBuilder<StringSelectMenuBuilder>()
+                    .addComponents(
+                        new StringSelectMenuBuilder()
+                            .setCustomId('ticket_add_user_select')
+                            .setPlaceholder('Select a user here...')
+                            .addOptions(
+                                availableUsers.slice(0, 25).map(member => ({
+                                    label: member.displayName,
+                                    value: member.id,
+                                    description: `${member.user.tag}`
+                                }))
+                            )
+                    );
+
+                await interaction.reply({
+                    embeds: [addUserEmbed],
+                    components: [addUserSelect],
+                    flags: 1 << 6
+                });
+                break;
+
+            case 'ticket_remove_user':
+                // Check if user has permission to manage users
+                if (!serverUtils.hasAdminOrHigherRole(interaction.member) && 
+                    ticket.claimedBy !== interaction.user.id) {
+                    await interaction.reply({
+                        content: '❌ Only the staff member who claimed the ticket or administrators can manage users',
+                        flags: 1 << 6
+                    });
+                    return;
+                }
+
+                if (!ticket.additionalUsers?.length) {
+                    await interaction.reply({
+                        content: '❌ No users to remove from the ticket',
+                        flags: 1 << 6
+                    });
+                    return;
+                }
+
+                const removeUserEmbed = new EmbedBuilder()
+                    .setColor(serverUtils.getColor('primary'))
+                    .setTitle('🔧 Remove user')
+                    .setDescription('Please, select the user you want to remove from the ticket.')
+                    .setFooter(serverUtils.getFooter());
+
+                const removeUserSelect = new ActionRowBuilder<StringSelectMenuBuilder>()
+                    .addComponents(
+                        new StringSelectMenuBuilder()
+                            .setCustomId('ticket_remove_user_select')
+                            .setPlaceholder('Select a user here...')
+                            .addOptions(
+                                ticket.additionalUsers.map(userId => {
+                                    const member = interaction.guild?.members.cache.get(userId);
+                                    return {
+                                        label: member?.displayName || userId,
+                                        value: userId,
+                                        description: member?.user.tag || 'Unknown User'
+                                    };
+                                })
+                            )
+                    );
+
+                await interaction.reply({
+                    embeds: [removeUserEmbed],
+                    components: [removeUserSelect],
                     flags: 1 << 6
                 });
                 break;

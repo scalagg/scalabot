@@ -422,25 +422,80 @@ export class TicketService {
     }
 
     async addUserToTicket(ticketId: ObjectId, userId: string): Promise<void> {
-        this.checkInitialized();
+        const ticket = await TicketModel.findById(ticketId);
+        if (!ticket) {
+            throw new Error('Ticket not found');
+        }
+
+        // Check if user is already in the ticket
+        if (userId === ticket.userId || userId === ticket.claimedBy || ticket.additionalUsers.includes(userId)) {
+            throw new Error('User is already in the ticket');
+        }
+
+        // Add user to ticket
         await TicketModel.updateOne(
             { _id: ticketId },
-            {
-                $addToSet: { additionalUsers: userId },
-                $set: { updatedAt: new Date() }
+            { 
+                $addToSet: { additionalUsers: userId }
             }
         );
+
+        // Get the channel
+        const channel = await this.client.channels.fetch(ticket.channelId) as TextChannel;
+        if (!channel) {
+            throw new Error('Channel not found');
+        }
+
+        // Add channel permissions for the user
+        await channel.permissionOverwrites.edit(userId, {
+            ViewChannel: true,
+            SendMessages: true
+        });
     }
 
     async removeUserFromTicket(ticketId: ObjectId, userId: string): Promise<void> {
-        this.checkInitialized();
+        const ticket = await TicketModel.findById(ticketId);
+        if (!ticket) {
+            throw new Error('Ticket not found');
+        }
+
+        // Check if user can be removed
+        if (userId === ticket.userId || userId === ticket.claimedBy) {
+            throw new Error('Cannot remove ticket creator or claiming staff');
+        }
+
+        if (!ticket.additionalUsers.includes(userId)) {
+            throw new Error('User is not in the ticket');
+        }
+
+        // Remove user from ticket
         await TicketModel.updateOne(
             { _id: ticketId },
-            {
-                $pull: { additionalUsers: userId },
-                $set: { updatedAt: new Date() }
+            { 
+                $pull: { additionalUsers: userId }
             }
         );
+
+        // Get the channel
+        const channel = await this.client.channels.fetch(ticket.channelId) as TextChannel;
+        if (!channel) {
+            throw new Error('Channel not found');
+        }
+
+        // Remove channel permissions for the user
+        await channel.permissionOverwrites.delete(userId);
+    }
+
+    async getAvailableUsersForTicket(guildId: string, ticket: Ticket): Promise<GuildMember[]> {
+        const guild = await this.client.guilds.fetch(guildId);
+        const members = await guild.members.fetch();
+        
+        // Filter out users who are already in the ticket
+        return members.filter(member => 
+            member.id !== ticket.userId && 
+            member.id !== ticket.claimedBy && 
+            !ticket.additionalUsers.includes(member.id)
+        ).toJSON();
     }
 }
 

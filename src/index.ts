@@ -126,6 +126,11 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         else if (interaction.isStringSelectMenu()) {
             // Handle any select menu interactions here if needed
             console.log('[DEBUG] Select menu interaction:', interaction.customId);
+            
+            // Handle ticket-related select menus
+            if (interaction.customId.startsWith('ticket_')) {
+                await handleTicketManagement(interaction);
+            }
         }
     } catch (error) {
         console.error('Error handling interaction:', error);
