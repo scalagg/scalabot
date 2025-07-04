@@ -19,7 +19,8 @@ import { handleModal as handleTicketModal } from './handlers/TicketModalHandler'
 import { 
     handleTicketManagement,
     handleCloseConfirmation,
-    handleRating 
+    handleRating,
+    handleAddUserModal
 } from './handlers/TicketManagementHandler';
 import { mongoService } from './services/MongoService';
 import { ticketService } from './services/TicketService';
@@ -121,6 +122,8 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         else if (interaction.isModalSubmit()) {
             if (interaction.customId.startsWith('ticket-')) {
                 await handleTicketModal(interaction);
+            } else if (interaction.customId === 'ticket_add_user_modal') {
+                await handleAddUserModal(interaction);
             }
         }
         else if (interaction.isStringSelectMenu()) {

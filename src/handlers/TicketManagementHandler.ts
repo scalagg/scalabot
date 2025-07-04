@@ -231,40 +231,22 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                     return;
                 }
 
-                const availableUsers = await ticketService.getAvailableUsersForTicket(interaction.guildId!, ticket);
-                if (availableUsers.length === 0) {
-                    await interaction.reply({
-                        content: '❌ No users available to add to the ticket',
-                        flags: 1 << 6
-                    });
-                    return;
-                }
+                // Create modal for user input
+                const modal = new ModalBuilder()
+                    .setCustomId('ticket_add_user_modal')
+                    .setTitle('Add User to Ticket');
 
-                const addUserEmbed = new EmbedBuilder()
-                    .setColor(serverUtils.getColor('primary'))
-                    .setTitle('🔧 Add user')
-                    .setDescription('Please, select the user you want to add to the ticket.')
-                    .setFooter(serverUtils.getFooter());
+                const userInput = new TextInputBuilder()
+                    .setCustomId('user_input')
+                    .setLabel('Enter username or ID')
+                    .setPlaceholder('Enter username (e.g. Pawful) or ID (e.g. 1057312650381504543)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
 
-                const addUserSelect = new ActionRowBuilder<StringSelectMenuBuilder>()
-                    .addComponents(
-                        new StringSelectMenuBuilder()
-                            .setCustomId('ticket_add_user_select')
-                            .setPlaceholder('Select a user here...')
-                            .addOptions(
-                                availableUsers.slice(0, 25).map(member => ({
-                                    label: member.displayName,
-                                    value: member.id,
-                                    description: `${member.user.tag}`
-                                }))
-                            )
-                    );
+                const firstActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(userInput);
+                modal.addComponents(firstActionRow);
 
-                await interaction.reply({
-                    embeds: [addUserEmbed],
-                    components: [addUserSelect],
-                    flags: 1 << 6
-                });
+                await interaction.showModal(modal);
                 break;
 
             case 'ticket_remove_user':
@@ -549,6 +531,78 @@ export async function handleFeedback(interaction: ModalSubmitInteraction) {
         console.error('[ERROR]', error);
         await interaction.reply({ 
             content: '❌ An error occurred', 
+            flags: 1 << 6 
+        });
+    }
+}
+
+export async function handleAddUserModal(interaction: ModalSubmitInteraction) {
+    try {
+        // Get the initial ticket to verify it exists
+        const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
+        if (!ticket) {
+            await interaction.reply({ 
+                content: '❌ Ticket not found', 
+                flags: 1 << 6 
+            });
+            return;
+        }
+
+        // Get the user input
+        const userInput = interaction.fields.getTextInputValue('user_input');
+
+        // Try to find the user
+        let member;
+        if (/^\d+$/.test(userInput)) {
+            // Input is a user ID
+            try {
+                member = await interaction.guild?.members.fetch(userInput);
+            } catch (error) {
+                member = null;
+            }
+        } else {
+            // Input is a username
+            const members = await interaction.guild?.members.fetch();
+            member = members?.find(m => 
+                m.user.username.toLowerCase() === userInput.toLowerCase() ||
+                m.displayName.toLowerCase() === userInput.toLowerCase()
+            );
+        }
+
+        if (!member) {
+            await interaction.reply({
+                content: '❌ User not found. Please check the username or ID and try again.',
+                flags: 1 << 6
+            });
+            return;
+        }
+
+        // Add the user to the ticket
+        try {
+            await ticketService.addUserToTicket(ticket._id!, member.id);
+
+            // Send ephemeral confirmation
+            await interaction.reply({
+                content: 'The user was successfully added to the ticket.',
+                flags: 1 << 6
+            });
+
+            // Send public announcement
+            if (interaction.channel instanceof TextChannel) {
+                await interaction.channel.send({
+                    content: `<@${member.id}> has been added to the ticket.`
+                });
+            }
+        } catch (error) {
+            await interaction.reply({
+                content: `❌ Failed to add user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                flags: 1 << 6
+            });
+        }
+    } catch (error) {
+        console.error('[ERROR] Add user modal error:', error);
+        await interaction.reply({ 
+            content: '❌ An error occurred while processing your request.', 
             flags: 1 << 6 
         });
     }
