@@ -162,7 +162,12 @@ export class ServerUtils {
 
     // Utility methods for common operations
     public getColor(type: keyof ServerTheme): ColorResolvable {
-        return this.getTheme()[type];
+        const color = this.getTheme()[type];
+        if (!color) {
+            // Fallback to primary color if the requested color is undefined
+            return this.getTheme().primary;
+        }
+        return color;
     }
 
     public getFooter(): { text: string; iconURL?: string } {

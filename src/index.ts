@@ -168,6 +168,25 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             else if (interaction.customId.startsWith('ticket_')) {
                 await handleTicketManagement(interaction);
             }
+        } else if (interaction.isAutocomplete()) {
+            const autocompleteInteraction = interaction as any;
+            console.log('[DEBUG] Autocomplete interaction:', autocompleteInteraction.commandName);
+            
+            // Get the command from the collection
+            const command = commandLoader.getCommand(autocompleteInteraction.commandName);
+            if (!command || !command.autocomplete) {
+                console.log('[DEBUG] Command or autocomplete function not found:', autocompleteInteraction.commandName);
+                await autocompleteInteraction.respond([]);
+                return;
+            }
+
+            try {
+                console.log('[DEBUG] Executing autocomplete:', autocompleteInteraction.commandName);
+                await command.autocomplete(autocompleteInteraction);
+            } catch (error) {
+                console.error('[ERROR] Error executing autocomplete:', error);
+                await autocompleteInteraction.respond([]);
+            }
         } else if (interaction.isChatInputCommand()) {
             const commandInteraction = interaction as ChatInputCommandInteraction;
             console.log('[DEBUG] Chat command received:', commandInteraction.commandName);

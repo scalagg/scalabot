@@ -72,7 +72,7 @@ bun run index.ts
 - [x] Performance metrics
 
 ### Phase 3: Moderation Tools (Planned)
-- [ ] Discord moderation commands
+- [x] Discord moderation commands
 - [ ] Role management
 - [ ] Auto-moderation
 - [ ] Logging system
