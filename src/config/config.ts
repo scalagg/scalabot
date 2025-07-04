@@ -5,6 +5,7 @@ import { join } from 'path';
 interface BotConfig {
   token: string;
   welcomeChannelId: string;
+  ticketLogsChannelId: string;
   apiBaseUrl: string;
   apiKey: string;
   mongoUri: string;
@@ -12,6 +13,7 @@ interface BotConfig {
   redisHost: string;
   redisPort: number;
   redisPassword: string;
+  testGuildId?: string; // Optional test guild ID for development
   welcomeImage?: {
     backgroundPath?: string;
     guildName?: string;
@@ -25,6 +27,7 @@ interface BotConfig {
       memberCount?: number;
     };
   };
+  welcomeMessage: string;
 }
 
 class Config {
@@ -47,8 +50,8 @@ class Config {
 
   private validateConfig() {
     const requiredFields: (keyof BotConfig)[] = [
-      'token', 'welcomeChannelId', 'apiBaseUrl', 'apiKey',
-      'mongoUri', 'mongoDbName', 'redisHost', 'redisPort', 'redisPassword'
+      'token', 'welcomeChannelId', 'ticketLogsChannelId', 'apiBaseUrl', 'apiKey',
+      'mongoUri', 'mongoDbName', 'redisHost', 'redisPort', 'redisPassword', 'welcomeMessage'
     ];
 
     for (const field of requiredFields) {
@@ -71,6 +74,10 @@ class Config {
 
   public get welcomeChannelId(): string {
     return this.config.welcomeChannelId;
+  }
+
+  public get ticketLogsChannelId(): string {
+    return this.config.ticketLogsChannelId;
   }
 
   public get apiBaseUrl(): string {
@@ -101,8 +108,16 @@ class Config {
     return this.config.redisPassword;
   }
 
+  public get testGuildId(): string | undefined {
+    return this.config.testGuildId;
+  }
+
   public get welcomeImageConfig() {
     return this.config.welcomeImage || {};
+  }
+
+  public get welcomeMessage(): string {
+    return this.config.welcomeMessage;
   }
 }
 
@@ -110,6 +125,7 @@ class Config {
 export const config = {
   get token() { return Config.getInstance().token; },
   get welcomeChannelId() { return Config.getInstance().welcomeChannelId; },
+  get ticketLogsChannelId() { return Config.getInstance().ticketLogsChannelId; },
   get apiBaseUrl() { return Config.getInstance().apiBaseUrl; },
   get apiKey() { return Config.getInstance().apiKey; },
   get mongoUri() { return Config.getInstance().mongoUri; },
@@ -117,5 +133,7 @@ export const config = {
   get redisHost() { return Config.getInstance().redisHost; },
   get redisPort() { return Config.getInstance().redisPort; },
   get redisPassword() { return Config.getInstance().redisPassword; },
-  get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; }
+  get testGuildId() { return Config.getInstance().testGuildId; },
+  get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; },
+  get welcomeMessage() { return Config.getInstance().welcomeMessage; }
 } as const; 

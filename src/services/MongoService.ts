@@ -1,14 +1,13 @@
-import { MongoClient, Collection, Db } from 'mongodb';
+import mongoose from 'mongoose';
+import type { Collection } from 'mongodb';
 import { config } from '../config/config';
 
-export class MongoService {
+class MongoService {
     private static instance: MongoService;
-    private client: MongoClient;
-    private db: Db;
+    private isConnected: boolean = false;
+    private connectionPromise: Promise<typeof mongoose> | null = null;
 
-    private constructor() {
-        this.client = new MongoClient(config.mongoUri);
-    }
+    private constructor() {}
 
     public static getInstance(): MongoService {
         if (!MongoService.instance) {
@@ -18,23 +17,64 @@ export class MongoService {
     }
 
     public async connect(): Promise<void> {
-        if (!this.db) {
-            await this.client.connect();
-            this.db = this.client.db(config.mongoDbName); // Using exact case as existing DB
+        if (this.isConnected) {
+            console.log('[MongoDB] Already connected');
+            return;
+        }
+
+        if (this.connectionPromise) {
+            console.log('[MongoDB] Connection in progress, waiting...');
+            await this.connectionPromise;
+            return;
+        }
+
+        try {
+            console.log('[MongoDB] Connecting to database...');
+            
+            // Set Mongoose options
+            mongoose.set('strictQuery', true);
+
+            // Create connection promise
+            this.connectionPromise = mongoose.connect(config.mongoUri, {
+                serverSelectionTimeoutMS: 5000, // Reduce from default 30s to 5s
+                connectTimeoutMS: 10000,
+                socketTimeoutMS: 45000,
+            });
+
+            // Wait for connection
+            await this.connectionPromise;
+            
+            this.isConnected = true;
+            console.log('[MongoDB] Connected successfully');
+
+            // Handle connection errors
+            mongoose.connection.on('error', (error) => {
+                console.error('[MongoDB] Connection error:', error);
+                this.isConnected = false;
+            });
+
+            mongoose.connection.on('disconnected', () => {
+                console.log('[MongoDB] Disconnected from database');
+                this.isConnected = false;
+            });
+
+        } catch (error) {
+            console.error('[MongoDB] Connection failed:', error);
+            this.connectionPromise = null;
+            this.isConnected = false;
+            throw error;
         }
     }
 
-    public async disconnect(): Promise<void> {
-        if (this.client) {
-            await this.client.close();
+    public getCollection<T extends Document>(name: string): Collection<T> {
+        if (!this.isConnected) {
+            throw new Error('MongoDB not connected. Call connect() first.');
         }
+        return mongoose.connection.collection(name);
     }
 
-    public getCollection<T>(collectionName: string): Collection<T> {
-        if (!this.db) {
-            throw new Error('Database not connected. Call connect() first.');
-        }
-        return this.db.collection<T>(collectionName);
+    public isConnectedToMongo(): boolean {
+        return this.isConnected;
     }
 }
 
