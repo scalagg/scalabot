@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import type { Collection } from 'mongodb';
+import type { Collection, Document } from 'mongodb';
 import { config } from '../config/config';
 
 class MongoService {
@@ -66,7 +66,7 @@ class MongoService {
         }
     }
 
-    public getCollection<T extends Document>(name: string): Collection<T> {
+    public getCollection<T extends { _id: string }>(name: string): Collection<T & Document> {
         if (!this.isConnected) {
             throw new Error('MongoDB not connected. Call connect() first.');
         }

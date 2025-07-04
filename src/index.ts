@@ -6,7 +6,8 @@ import {
     ButtonInteraction,
     ModalSubmitInteraction,
     StringSelectMenuInteraction,
-    TextChannel
+    TextChannel,
+    Partials
 } from 'discord.js';
 import type { 
     Interaction,
@@ -15,6 +16,7 @@ import type {
 import { config } from './config/config';
 import { CommandLoaderService } from './services/CommandLoaderService';
 import { handleTicketButton } from './handlers/TicketButtonHandler';
+import { handleModal } from './commands/deployverify';
 import { handleModal as handleTicketModal } from './handlers/TicketModalHandler';
 import { 
     handleTicketManagement,
@@ -26,6 +28,8 @@ import { mongoService } from './services/MongoService';
 import { ticketService } from './services/TicketService';
 import { transcriptService } from './services/TranscriptService';
 import { serverUtils } from './utils/ServerUtils';
+import { PunishmentService } from './services/PunishmentService';
+import { handleButton } from './commands/deployverify';
 
 // Create Discord client
 const client = new Client({
@@ -62,7 +66,11 @@ client.once(Events.ClientReady, async (readyClient) => {
         await ticketService.initialize();
         console.log('Ticket service initialized');
 
-        // 3. Initialize commands last
+        // 3. Initialize punishment service
+        const punishmentService = PunishmentService.initialize(client);
+        punishmentService.startPeriodicChecks();
+
+        // 4. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 
@@ -99,31 +107,37 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             await command.execute(interaction);
         }
         else if (interaction.isButton()) {
-            const customId = interaction.customId;
-            console.log('[DEBUG] Button interaction:', customId);
-
+            const buttonInteraction = interaction as ButtonInteraction;
+            console.log('[DEBUG] Button interaction:', buttonInteraction.customId);
+            
+            if (buttonInteraction.customId === 'verify-button') {
+                await handleButton(buttonInteraction);
+            }
             // Handle ticket creation buttons
-            if (customId.startsWith('ticket_') && ['general', 'staff', 'buycraft', 'punishments'].some(type => customId === `ticket_${type}`)) {
-                await handleTicketButton(interaction);
+            else if (buttonInteraction.customId.startsWith('ticket_') && ['general', 'staff', 'buycraft', 'punishments'].some(type => buttonInteraction.customId === `ticket_${type}`)) {
+                await handleTicketButton(buttonInteraction);
             }
             // Handle close confirmation buttons
-            else if (customId.startsWith('ticket_close_')) {
-                await handleCloseConfirmation(interaction);
+            else if (buttonInteraction.customId.startsWith('ticket_close_')) {
+                await handleCloseConfirmation(buttonInteraction);
             }
             // Handle rating buttons
-            else if (customId.startsWith('ticket_rate_')) {
-                await handleRating(interaction);
+            else if (buttonInteraction.customId.startsWith('ticket_rate_')) {
+                await handleRating(buttonInteraction);
             }
             // Handle other ticket-related buttons
-            else if (customId.startsWith('ticket_')) {
-                await handleTicketManagement(interaction);
+            else if (buttonInteraction.customId.startsWith('ticket_')) {
+                await handleTicketManagement(buttonInteraction);
             }
         }
         else if (interaction.isModalSubmit()) {
-            if (interaction.customId.startsWith('ticket-')) {
-                await handleTicketModal(interaction);
-            } else if (interaction.customId === 'ticket_add_user_modal') {
-                await handleAddUserModal(interaction);
+            const modalInteraction = interaction as ModalSubmitInteraction;
+            if (modalInteraction.customId === 'verify-modal') {
+                await handleModal(modalInteraction);
+            } else if (modalInteraction.customId.startsWith('ticket-')) {
+                await handleTicketModal(modalInteraction);
+            } else if (modalInteraction.customId === 'ticket_add_user_modal') {
+                await handleAddUserModal(modalInteraction);
             }
         }
         else if (interaction.isStringSelectMenu()) {
@@ -133,6 +147,31 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             // Handle ticket-related select menus
             if (interaction.customId.startsWith('ticket_')) {
                 await handleTicketManagement(interaction);
+            }
+        } else if (interaction.isChatInputCommand()) {
+            const commandInteraction = interaction as ChatInputCommandInteraction;
+            console.log('[DEBUG] Chat command received:', commandInteraction.commandName);
+            
+            // Get the command from the collection
+            const command = commandLoader.getCommand(commandInteraction.commandName);
+            if (!command) {
+                console.log('[DEBUG] Command not found:', commandInteraction.commandName);
+                await commandInteraction.reply({ content: 'Unknown command.', ephemeral: true });
+                return;
+            }
+
+            try {
+                console.log('[DEBUG] Executing command:', commandInteraction.commandName);
+                await command.execute(commandInteraction);
+            } catch (error) {
+                console.error('[ERROR] Error executing command:', error);
+                const replyContent = { content: 'There was an error executing this command!', ephemeral: true };
+                
+                if (commandInteraction.deferred) {
+                    await commandInteraction.editReply(replyContent);
+                } else if (!commandInteraction.replied) {
+                    await commandInteraction.reply(replyContent);
+                }
             }
         }
     } catch (error) {

@@ -6,6 +6,7 @@ interface BotConfig {
   token: string;
   welcomeChannelId: string;
   ticketLogsChannelId: string;
+  punishmentLogsChannelId: string;
   apiBaseUrl: string;
   apiKey: string;
   mongoUri: string;
@@ -50,7 +51,7 @@ class Config {
 
   private validateConfig() {
     const requiredFields: (keyof BotConfig)[] = [
-      'token', 'welcomeChannelId', 'ticketLogsChannelId', 'apiBaseUrl', 'apiKey',
+      'token', 'welcomeChannelId', 'ticketLogsChannelId', 'punishmentLogsChannelId', 'apiBaseUrl', 'apiKey',
       'mongoUri', 'mongoDbName', 'redisHost', 'redisPort', 'redisPassword', 'welcomeMessage'
     ];
 
@@ -78,6 +79,10 @@ class Config {
 
   public get ticketLogsChannelId(): string {
     return this.config.ticketLogsChannelId;
+  }
+
+  public get punishmentLogsChannelId(): string {
+    return this.config.punishmentLogsChannelId;
   }
 
   public get apiBaseUrl(): string {
@@ -126,6 +131,7 @@ export const config = {
   get token() { return Config.getInstance().token; },
   get welcomeChannelId() { return Config.getInstance().welcomeChannelId; },
   get ticketLogsChannelId() { return Config.getInstance().ticketLogsChannelId; },
+  get punishmentLogsChannelId() { return Config.getInstance().punishmentLogsChannelId; },
   get apiBaseUrl() { return Config.getInstance().apiBaseUrl; },
   get apiKey() { return Config.getInstance().apiKey; },
   get mongoUri() { return Config.getInstance().mongoUri; },

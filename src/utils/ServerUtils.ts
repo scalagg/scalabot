@@ -8,6 +8,7 @@ export enum ServerType {
 
 interface ServerTheme {
     primary: ColorResolvable;
+    secondary?: ColorResolvable; // Optional secondary color for gradients
     success: ColorResolvable;
     error: ColorResolvable;
     warning: ColorResolvable;
@@ -48,7 +49,7 @@ const SCALA_CONFIG: ServerConfig = {
     info: {
         name: 'Scala Network',
         website: 'https://scala.gg',
-        ip: 'play.scala.gg',
+        ip: 'scala.gg',
         store: 'store.scala.gg',
         discord: 'discord.scala.gg',
         logo: 'https://i.imgur.com/JGiC6hP.png'
@@ -126,7 +127,7 @@ const HOLYPVP_CONFIG: ServerConfig = {
     }
 };
 
-class ServerUtils {
+export class ServerUtils {
     private static instance: ServerUtils;
     private serverType: ServerType = ServerType.SCALA; // Default to Scala
 
@@ -256,4 +257,5 @@ class ServerUtils {
     }
 }
 
+// Export the singleton instance
 export const serverUtils = ServerUtils.getInstance(); 
