@@ -34,6 +34,8 @@ import { moderationService } from './services/ModerationService';
 import { autoModerationService } from './services/AutoModerationService';
 import { loggingService } from './services/LoggingService';
 import { handleButton } from './commands/deployverify';
+import { GiveawayButtonHandler } from './handlers/GiveawayButtonHandler';
+import { giveawayService } from './services/GiveawayService';
 
 // Create Discord client
 const client = new Client({
@@ -86,7 +88,11 @@ client.once(Events.ClientReady, async (readyClient) => {
         loggingService.setClient(client);
         console.log('Logging service initialized');
 
-        // 7. Initialize commands last
+        // 7. Initialize giveaway service
+        giveawayService.setClient(client);
+        console.log('Giveaway service initialized');
+
+        // 8. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 
@@ -126,7 +132,12 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             const buttonInteraction = interaction as ButtonInteraction;
             console.log('[DEBUG] Button interaction:', buttonInteraction.customId);
             
-            if (buttonInteraction.customId === 'verify-button') {
+            // Handle giveaway buttons
+            if (buttonInteraction.customId.startsWith('giveaway_')) {
+                await GiveawayButtonHandler.handle(buttonInteraction);
+            }
+            // Handle verification button
+            else if (buttonInteraction.customId === 'verify-button') {
                 await handleButton(buttonInteraction);
             }
             // Handle ticket creation buttons

@@ -78,7 +78,7 @@ bun run index.ts
 - [x] Logging system
 
 ### Phase 4: Additional Features (Planned)
-- [ ] Social commands
+- [x] Social commands
 - [ ] User information system
 - [ ] Practice/Duels system
 - [ ] Giveaway system
