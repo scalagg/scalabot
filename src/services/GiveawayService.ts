@@ -324,7 +324,7 @@ export class GiveawayService {
                     .setDescription(`Congratulations ${winnerMentions}! You won: **${giveaway.prize}**`)
                     .addFields({
                         name: '🎫 How to Claim Your Prize',
-                        value: 'Please create a ticket in <#ticket-channel> to claim your prize. Include the giveaway message ID in your ticket.',
+                        value: 'Please create a ticket to claim your prize. Include the giveaway message ID in your ticket.',
                         inline: false
                     })
                     .addFields({
@@ -334,7 +334,7 @@ export class GiveawayService {
                     })
                     .addFields({
                         name: '⏰ Claim Deadline',
-                        value: 'Please claim within 7 days or the prize may be forfeited.',
+                        value: 'Please claim within 8 hours or the prize may be forfeited.',
                         inline: true
                     })
                     .setTimestamp()

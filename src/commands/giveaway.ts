@@ -4,10 +4,12 @@ import {
     GuildMember, 
     EmbedBuilder,
     PermissionFlagsBits,
-    TextChannel
+    TextChannel,
+    AttachmentBuilder
 } from 'discord.js';
 import { serverUtils } from '../utils/ServerUtils';
 import { giveawayService } from '../services/GiveawayService';
+import { generateGiveawayImage } from '../libs/giveawayCanvas';
 
 export const data = new SlashCommandBuilder()
     .setName('giveaway')
@@ -180,11 +182,22 @@ async function createGiveaway(interaction: ChatInputCommandInteraction) {
             ended: false
         };
 
+        // Generate the canvas image
+        const serverType = serverUtils.getServerTypeFromGuildId(interaction.guildId!);
+        const imageBuffer = await generateGiveawayImage({
+            prize,
+            duration,
+            server: serverType
+        });
+        const attachment = new AttachmentBuilder(imageBuffer, { name: 'giveaway.png' });
+
         const embed = giveawayService.createGiveawayEmbed(tempGiveaway as any);
+        embed.setImage('attachment://giveaway.png');
 
         // Send the giveaway message first
         const message = await channel.send({
             embeds: [embed],
+            files: [attachment],
             components: [] // We'll add buttons after creating the database entry
         });
 
@@ -198,6 +211,7 @@ async function createGiveaway(interaction: ChatInputCommandInteraction) {
         const buttons = giveawayService.createGiveawayButtons(giveaway);
         await message.edit({
             embeds: [embed],
+            files: [attachment],
             components: [buttons]
         });
 
@@ -243,11 +257,28 @@ async function endGiveaway(interaction: ChatInputCommandInteraction) {
 
         // Update the message
         const channel = await interaction.guild!.channels.fetch(giveaway.channelId) as TextChannel;
+        let attachment: AttachmentBuilder | undefined = undefined;
+        let winnerImageName = 'giveaway-winner.png';
         if (channel) {
             const message = await channel.messages.fetch(messageId).catch(() => null);
             if (message) {
                 const embed = giveawayService.createGiveawayEmbed(endedGiveaway, true);
-                await message.edit({ embeds: [embed], components: [] });
+                // Generate winner image if there are winners
+                if (endedGiveaway.winnerIds && endedGiveaway.winnerIds.length > 0) {
+                    const serverType = serverUtils.getServerTypeFromGuildId(interaction.guildId!);
+                    const winnerTags = endedGiveaway.winnerIds.map(id => `<@${id}>`);
+                    const imageBuffer = await generateGiveawayImage({
+                        prize: giveaway.prize,
+                        server: serverType,
+                        winners: winnerTags,
+                        isWinner: true
+                    });
+                    attachment = new AttachmentBuilder(imageBuffer, { name: winnerImageName });
+                    embed.setImage(`attachment://${winnerImageName}`);
+                    await message.edit({ embeds: [embed], files: [attachment], components: [] });
+                } else {
+                    await message.edit({ embeds: [embed], components: [] });
+                }
             }
         }
 
@@ -260,7 +291,7 @@ async function endGiveaway(interaction: ChatInputCommandInteraction) {
                 .setDescription(`Congratulations ${winnerMentions}! You won: **${giveaway.prize}**`)
                 .addFields({
                     name: '🎫 How to Claim Your Prize',
-                    value: 'Please create a ticket in <#ticket-channel> to claim your prize. Include the giveaway message ID in your ticket.',
+                    value: 'Please create a ticket to claim your prize. Include the giveaway message ID in your ticket.',
                     inline: false
                 })
                 .addFields({
@@ -270,15 +301,17 @@ async function endGiveaway(interaction: ChatInputCommandInteraction) {
                 })
                 .addFields({
                     name: '⏰ Claim Deadline',
-                    value: 'Please claim within 7 days or the prize may be forfeited.',
+                    value: 'Please claim within 8 hours or the prize may be forfeited.',
                     inline: true
                 })
                 .setTimestamp()
                 .setFooter(serverUtils.getFooter());
+            if (attachment) announcementEmbed.setImage(`attachment://${winnerImageName}`);
 
             await interaction.editReply({
                 content: `✅ Giveaway ended! Winners: ${winnerMentions}`,
-                embeds: [announcementEmbed]
+                embeds: [announcementEmbed],
+                files: attachment ? [attachment] : []
             });
         } else {
             await interaction.editReply({
@@ -324,11 +357,28 @@ async function rerollGiveaway(interaction: ChatInputCommandInteraction) {
 
         // Update the message
         const channel = await interaction.guild!.channels.fetch(giveaway.channelId) as TextChannel;
+        let attachment: AttachmentBuilder | undefined = undefined;
+        let rerollImageName = 'giveaway-reroll.png';
         if (channel) {
             const message = await channel.messages.fetch(messageId).catch(() => null);
             if (message) {
                 const embed = giveawayService.createGiveawayEmbed(rerolledGiveaway, true);
-                await message.edit({ embeds: [embed], components: [] });
+                if (rerolledGiveaway.winnerIds && rerolledGiveaway.winnerIds.length > 0) {
+                    const serverType = serverUtils.getServerTypeFromGuildId(interaction.guildId!);
+                    const winnerTags = rerolledGiveaway.winnerIds.map(id => `<@${id}>`);
+                    const imageBuffer = await generateGiveawayImage({
+                        prize: giveaway.prize,
+                        server: serverType,
+                        winners: winnerTags,
+                        isWinner: true,
+                        isReroll: true
+                    });
+                    attachment = new AttachmentBuilder(imageBuffer, { name: rerollImageName });
+                    embed.setImage(`attachment://${rerollImageName}`);
+                    await message.edit({ embeds: [embed], files: [attachment], components: [] });
+                } else {
+                    await message.edit({ embeds: [embed], components: [] });
+                }
             }
         }
 
@@ -356,10 +406,12 @@ async function rerollGiveaway(interaction: ChatInputCommandInteraction) {
                 })
                 .setTimestamp()
                 .setFooter(serverUtils.getFooter());
+            if (attachment) announcementEmbed.setImage(`attachment://${rerollImageName}`);
 
             await interaction.editReply({
                 content: `✅ Giveaway rerolled! New winners: ${winnerMentions}`,
-                embeds: [announcementEmbed]
+                embeds: [announcementEmbed],
+                files: attachment ? [attachment] : []
             });
         } else {
             await interaction.editReply({
