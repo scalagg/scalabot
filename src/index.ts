@@ -32,6 +32,7 @@ import { serverUtils } from './utils/ServerUtils';
 import { PunishmentService } from './services/PunishmentService';
 import { moderationService } from './services/ModerationService';
 import { autoModerationService } from './services/AutoModerationService';
+import { loggingService } from './services/LoggingService';
 import { handleButton } from './commands/deployverify';
 
 // Create Discord client
@@ -81,7 +82,11 @@ client.once(Events.ClientReady, async (readyClient) => {
         autoModerationService.setClient(client);
         console.log('Auto-moderation service initialized');
 
-        // 6. Initialize commands last
+        // 6. Initialize logging service
+        loggingService.setClient(client);
+        console.log('Logging service initialized');
+
+        // 7. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 

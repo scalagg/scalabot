@@ -74,7 +74,7 @@ bun run index.ts
 ### Phase 3: Moderation Tools (Planned)
 - [x] Discord moderation commands
 - [x] Role management
-- [ ] Auto-moderation
+- [x] Auto-moderation
 - [ ] Logging system
 
 ### Phase 4: Additional Features (Planned)
