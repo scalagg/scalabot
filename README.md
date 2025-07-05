@@ -71,11 +71,11 @@ bun run index.ts
 - [x] MOTD display
 - [x] Performance metrics
 
-### Phase 3: Moderation Tools (Planned)
+### Phase 3: Moderation Tools (Completed)
 - [x] Discord moderation commands
 - [x] Role management
 - [x] Auto-moderation
-- [ ] Logging system
+- [x] Logging system
 
 ### Phase 4: Additional Features (Planned)
 - [ ] Social commands
