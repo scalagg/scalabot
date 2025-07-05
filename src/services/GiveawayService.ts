@@ -262,7 +262,12 @@ export class GiveawayService {
                     .setCustomId(`giveaway_join_${giveaway.messageId}`)
                     .setLabel('🎉 Join Giveaway')
                     .setStyle(ButtonStyle.Primary)
-                    .setEmoji('🎉')
+                    .setEmoji('🎉'),
+                new ButtonBuilder()
+                    .setCustomId(`giveaway_chances_${giveaway.messageId}`)
+                    .setLabel('🎲 My Chances')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('🎲')
             );
 
         return row;

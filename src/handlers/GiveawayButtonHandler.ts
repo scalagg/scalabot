@@ -10,6 +10,8 @@ export class GiveawayButtonHandler {
             await this.handleJoin(interaction);
         } else if (customId.startsWith('giveaway_leave_')) {
             await this.handleLeave(interaction);
+        } else if (customId.startsWith('giveaway_chances_')) {
+            await this.handleChances(interaction);
         }
     }
 
@@ -153,6 +155,72 @@ export class GiveawayButtonHandler {
             console.error('[GiveawayButtonHandler] Error handling leave:', error);
             await interaction.reply({
                 content: '❌ An error occurred while leaving the giveaway. Please try again.',
+                ephemeral: true
+            });
+        }
+    }
+
+    private static async handleChances(interaction: ButtonInteraction) {
+        try {
+            const messageId = interaction.customId.replace('giveaway_chances_', '');
+            const userId = interaction.user.id;
+
+            const giveaway = await giveawayService.getGiveawayById(messageId);
+            if (!giveaway) {
+                await interaction.reply({
+                    content: '❌ This giveaway no longer exists.',
+                    ephemeral: true
+                });
+                return;
+            }
+            if (giveaway.ended) {
+                await interaction.reply({
+                    content: '❌ This giveaway has already ended.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            const participantCount = giveaway.participants.length;
+            const winnerCount = giveaway.winners;
+            const isParticipating = giveaway.participants.includes(userId);
+            let chance = 0;
+            if (isParticipating && participantCount > 0) {
+                chance = Math.min(1, winnerCount / participantCount) * 100;
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor(serverUtils.getColor('info'))
+                .setTitle('🎲 Your Giveaway Chances')
+                .addFields(
+                    { name: '👥 Participants', value: participantCount.toString(), inline: true },
+                    { name: '🏆 Winners', value: winnerCount.toString(), inline: true }
+                )
+                .setFooter(serverUtils.getFooter())
+                .setTimestamp();
+
+            if (isParticipating) {
+                embed.addFields({
+                    name: '📈 Your Chance',
+                    value: `${chance.toFixed(2)}%`,
+                    inline: true
+                });
+            } else {
+                embed.addFields({
+                    name: '❗ Not Participating',
+                    value: 'Join the giveaway for a chance to win!',
+                    inline: false
+                });
+            }
+
+            await interaction.reply({
+                embeds: [embed],
+                ephemeral: true
+            });
+        } catch (error) {
+            console.error('[GiveawayButtonHandler] Error handling chances:', error);
+            await interaction.reply({
+                content: '❌ An error occurred while checking your chances.',
                 ephemeral: true
             });
         }

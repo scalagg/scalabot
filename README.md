@@ -81,7 +81,7 @@ bun run index.ts
 - [x] Social commands
 - [ ] User information system
 - [ ] Practice/Duels system
-- [ ] Giveaway system
+- [x] Giveaway system
 - [ ] Leaderboards
 - [ ] Anticheat integration
 
