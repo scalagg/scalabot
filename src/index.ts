@@ -314,19 +314,20 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
         // Skip if automoderation is disabled
         if (!config.geminiConfig.enabled) {
+            // If auto-moderation is disabled, just return (no automatic translation)
             return;
         }
 
         // Submit message for toxicity analysis
-        autoModerationService.submit(message, async (toxicityScore) => {
+        autoModerationService.submit(message, async (toxicityScore, translationContext) => {
             console.log(`[AutoModeration] Message from ${message.author.tag} scored ${toxicityScore}/100`);
-            // Handle toxic messages
-            await autoModerationService.handleToxicMessage(message, toxicityScore);
+            
+            // Handle toxic messages if above threshold
+            if (toxicityScore >= config.geminiConfig.muteThreshold) {
+                console.log(`[AutoModeration] Toxic message detected, taking moderation action`);
+                await autoModerationService.handleToxicMessage(message, toxicityScore, translationContext);
+            }
         });
-
-        // Call translation service
-        console.debug('[index] Calling translationService.translateIfNeeded');
-        await translationService.translateIfNeeded(message);
 
     } catch (error) {
         console.error('[AutoModeration/Translation] Error handling message:', error);

@@ -168,7 +168,7 @@ async function testMessage(interaction: ChatInputCommandInteraction) {
     } as any;
 
     // Test the message
-    autoModerationService.submit(mockMessage, async (toxicityScore) => {
+    autoModerationService.submit(mockMessage, async (toxicityScore, translationContext) => {
         const embed = new EmbedBuilder()
             .setColor(serverUtils.getColor('info'))
             .setTitle('🧪 Auto-Moderation Test Result')

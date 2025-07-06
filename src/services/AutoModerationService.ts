@@ -2,6 +2,7 @@ import { Client, Message, GuildMember, TextChannel, EmbedBuilder } from 'discord
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
 import { moderationService } from './ModerationService';
+import { translationService } from './TranslationService';
 
 interface GeminiRequest {
     contents: GeminiRequestContent[];
@@ -51,7 +52,7 @@ interface UsageMetadata {
 
 interface AutoModerationMessage {
     message: Message;
-    callback: (prediction: number) => void;
+    callback: (prediction: number, context?: { originalLanguage: string; translatedText: string | null; wasTranslated: boolean }) => void;
 }
 
 interface TokenInfo {
@@ -107,7 +108,7 @@ export class AutoModerationService {
         this.startProcessing();
     }
 
-    public submit(message: Message, callback: (prediction: number) => void) {
+    public submit(message: Message, callback: (prediction: number, context?: { originalLanguage: string; translatedText: string | null; wasTranslated: boolean }) => void) {
         this.queue.push({ message, callback });
     }
 
@@ -148,7 +149,27 @@ export class AutoModerationService {
             return;
         }
 
-        const prompt = config.geminiConfig.generativeAIPrompt.replace('%s', message.content);
+        // Translate the message to English for consistent moderation
+        let messageToAnalyze = message.content;
+        let originalLanguage = 'EN';
+        let translatedText = null;
+
+        try {
+            // Use the translation service for moderation
+            const translationResult = await translationService.translateForModeration(message.content);
+            
+            if (translationResult.translatedText) {
+                translatedText = translationResult.translatedText;
+                messageToAnalyze = translatedText;
+                originalLanguage = translationResult.originalLanguage;
+                console.log(`[AutoModeration] Translated message from ${originalLanguage} to English for analysis`);
+            }
+        } catch (error) {
+            console.warn('[AutoModeration] Translation failed, using original message:', error);
+            // Continue with original message if translation fails
+        }
+
+        const prompt = config.geminiConfig.generativeAIPrompt.replace('%s', messageToAnalyze);
 
         const geminiRequest: GeminiRequest = {
             contents: [
@@ -198,7 +219,12 @@ export class AutoModerationService {
             
             if (prediction !== null) {
                 this.markTokenSuccess(apiToken);
-                callback(prediction);
+                // Pass additional context about translation
+                callback(prediction, {
+                    originalLanguage,
+                    translatedText,
+                    wasTranslated: translatedText !== null
+                });
             } else {
                 this.markTokenFailure(apiToken);
             }
@@ -290,7 +316,7 @@ export class AutoModerationService {
         }
     }
 
-    public async handleToxicMessage(message: Message, toxicityScore: number) {
+    public async handleToxicMessage(message: Message, toxicityScore: number, translationContext?: { originalLanguage: string; translatedText: string | null; wasTranslated: boolean }) {
         if (toxicityScore < config.geminiConfig.muteThreshold) {
             return; // Not toxic enough to act on
         }
@@ -313,21 +339,29 @@ export class AutoModerationService {
             // Check if user has staff role (don't auto-mute staff)
             if (serverUtils.hasStaffRole(member)) {
                 console.log(`[AutoModeration] Staff member ${message.author.tag} sent toxic message, sending warning only`);
-                await this.sendStaffWarning(message, toxicityScore);
+                await this.sendStaffWarning(message, toxicityScore, translationContext);
                 return;
             }
 
             console.log(`[AutoModeration] Creating moderation action for ${message.author.tag}`);
 
-            // Create moderation action
+            // Create moderation action with translation context
+            const reason = translationContext?.wasTranslated 
+                ? `Auto-moderation: Toxic message detected (Score: ${toxicityScore}/100) - Original language: ${translationContext.originalLanguage}`
+                : `Auto-moderation: Toxic message detected (Score: ${toxicityScore}/100)`;
+
+            const evidence = translationContext?.wasTranslated
+                ? `Original message: "${message.content}" | Translated: "${translationContext.translatedText}"`
+                : `Original message: "${message.content}"`;
+
             const moderationAction = await moderationService.createModerationAction({
                 guildId: message.guildId!,
                 userId: message.author.id,
                 moderatorId: this.client.user!.id,
                 action: 'timeout',
-                reason: `Auto-moderation: Toxic message detected (Score: ${toxicityScore}/100)`,
+                reason,
                 duration: 5 * 60 * 1000, // 5 minutes
-                evidence: `Original message: "${message.content}"`,
+                evidence,
                 appealable: true
             });
 
@@ -357,12 +391,12 @@ export class AutoModerationService {
                 member,
                 { 
                     duration: '5 minutes',
-                    evidence: `Original message: "${message.content}"`
+                    evidence
                 }
             );
 
             // Send warning message in channel
-            await this.sendAutoModerationWarning(message, toxicityScore, moderationAction.punishmentId);
+            await this.sendAutoModerationWarning(message, toxicityScore, moderationAction.punishmentId, translationContext);
 
             console.log(`[AutoModeration] Successfully processed toxic message from ${message.author.tag}`);
 
@@ -371,7 +405,7 @@ export class AutoModerationService {
         }
     }
 
-    private async sendAutoModerationWarning(message: Message, toxicityScore: number, punishmentId: string) {
+    private async sendAutoModerationWarning(message: Message, toxicityScore: number, punishmentId: string, translationContext?: { originalLanguage: string; translatedText: string | null; wasTranslated: boolean }) {
         const embed = new EmbedBuilder()
             .setColor(serverUtils.getColor('warning'))
             .setTitle('🤖 Auto-Moderation Action')
@@ -387,12 +421,20 @@ export class AutoModerationService {
             .setTimestamp()
             .setFooter(serverUtils.getFooter());
 
+        // Add translation information if the message was translated
+        if (translationContext?.wasTranslated) {
+            embed.addFields(
+                { name: '🌐 Language', value: translationContext.originalLanguage, inline: true },
+                { name: '📖 Translation', value: translationContext.translatedText || 'N/A', inline: false }
+            );
+        }
+
         if (message.channel instanceof TextChannel) {
             await message.channel.send({ embeds: [embed] });
         }
     }
 
-    private async sendStaffWarning(message: Message, toxicityScore: number) {
+    private async sendStaffWarning(message: Message, toxicityScore: number, translationContext?: { originalLanguage: string; translatedText: string | null; wasTranslated: boolean }) {
         const embed = new EmbedBuilder()
             .setColor(serverUtils.getColor('warning'))
             .setTitle('⚠️ Staff Message Warning')
@@ -403,6 +445,14 @@ export class AutoModerationService {
             )
             .setTimestamp()
             .setFooter(serverUtils.getFooter());
+
+        // Add translation information if the message was translated
+        if (translationContext?.wasTranslated) {
+            embed.addFields(
+                { name: '🌐 Language', value: translationContext.originalLanguage, inline: true },
+                { name: '📖 Translation', value: translationContext.translatedText || 'N/A', inline: false }
+            );
+        }
 
         try {
             await message.author.send({ embeds: [embed] });
