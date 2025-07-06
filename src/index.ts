@@ -39,6 +39,8 @@ import { giveawayService } from './services/GiveawayService';
 import fetch from 'node-fetch';
 import * as franc from 'franc';
 import { translationService } from './services/TranslationService';
+import { filterService } from './services/FilterService';
+import { pingProtectionService } from './services/PingProtectionService';
 
 // Create Discord client
 const client = new Client({
@@ -95,7 +97,17 @@ client.once(Events.ClientReady, async (readyClient) => {
         giveawayService.setClient(client);
         console.log('Giveaway service initialized');
 
-        // 8. Initialize commands last
+        // 8. Initialize filter service
+        filterService.setClient(client);
+        await filterService.initialize();
+        console.log('Filter service initialized');
+
+        // 9. Initialize ping protection service
+        pingProtectionService.setClient(client);
+        await pingProtectionService.initialize();
+        console.log('Ping protection service initialized');
+
+        // 10. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 
