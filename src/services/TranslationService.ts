@@ -3,10 +3,20 @@ import fetch from 'node-fetch';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
 
+// DeepL API Response Types
+interface DeepLTranslation {
+    detected_source_language: string;
+    text: string;
+    confidence?: number;
+}
+
+interface DeepLResponse {
+    translations: DeepLTranslation[];
+}
+
 class TranslationService {
     public async translateIfNeeded(message: Message): Promise<void> {
         try {
-            // TODO: Add proper DeepL API response typing
             // Debug: Entry
             console.debug('[TranslationService] Checking message:', message.content);
 
@@ -39,7 +49,7 @@ class TranslationService {
                 body: `text=${encodeURIComponent(message.content)}&target_lang=EN`
             });
             
-            const deeplData = await deeplRes.json() as any;
+            const deeplData = await deeplRes.json() as DeepLResponse;
             console.debug('[TranslationService] DeepL API response:', deeplData);
             
             if (!deeplData.translations || !deeplData.translations[0]) {
