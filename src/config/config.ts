@@ -14,7 +14,7 @@ interface BotConfig {
   redisHost: string;
   redisPort: number;
   redisPassword: string;
-  testGuildId?: string; // Optional test guild ID for development
+  testGuildId?: string;
   gemini?: {
     apiKey: string;
     apiEndpoint: string;
@@ -36,6 +36,7 @@ interface BotConfig {
     };
   };
   welcomeMessage: string;
+  deeplApiKey?: string; // DeepL Free API key
 }
 
 class Config {
@@ -47,7 +48,9 @@ class Config {
       const configPath = join(process.cwd(), 'config.toml');
       const configFile = readFileSync(configPath, 'utf-8');
       this.config = parse(configFile) as BotConfig;
-
+      // Debug: print loaded config and DeepL key
+      console.debug('[Config] Loaded config:', this.config);
+      console.debug('[Config] deeplApiKey:', this.config.deeplApiKey);
       // Validate required fields
       this.validateConfig();
     } catch (error) {
@@ -141,6 +144,10 @@ class Config {
   public get welcomeMessage(): string {
     return this.config.welcomeMessage;
   }
+
+  public get deeplApiKey(): string | undefined {
+    return this.config.deeplApiKey;
+  }
 }
 
 // Export a type-safe config object with all the getters
@@ -159,5 +166,6 @@ export const config = {
   get testGuildId() { return Config.getInstance().testGuildId; },
   get geminiConfig() { return Config.getInstance().geminiConfig; },
   get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; },
-  get welcomeMessage() { return Config.getInstance().welcomeMessage; }
+  get welcomeMessage() { return Config.getInstance().welcomeMessage; },
+  get deeplApiKey() { return Config.getInstance().deeplApiKey; }
 } as const; 

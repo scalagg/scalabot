@@ -36,6 +36,9 @@ import { loggingService } from './services/LoggingService';
 import { handleButton } from './commands/deployverify';
 import { GiveawayButtonHandler } from './handlers/GiveawayButtonHandler';
 import { giveawayService } from './services/GiveawayService';
+import fetch from 'node-fetch';
+import * as franc from 'franc';
+import { translationService } from './services/TranslationService';
 
 // Create Discord client
 const client = new Client({
@@ -317,13 +320,16 @@ client.on(Events.MessageCreate, async (message: Message) => {
         // Submit message for toxicity analysis
         autoModerationService.submit(message, async (toxicityScore) => {
             console.log(`[AutoModeration] Message from ${message.author.tag} scored ${toxicityScore}/100`);
-            
             // Handle toxic messages
             await autoModerationService.handleToxicMessage(message, toxicityScore);
         });
 
+        // Call translation service
+        console.debug('[index] Calling translationService.translateIfNeeded');
+        await translationService.translateIfNeeded(message);
+
     } catch (error) {
-        console.error('[AutoModeration] Error handling message:', error);
+        console.error('[AutoModeration/Translation] Error handling message:', error);
     }
 });
 

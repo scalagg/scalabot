@@ -54,20 +54,52 @@ interface AutoModerationMessage {
     callback: (prediction: number) => void;
 }
 
+interface TokenInfo {
+    token: string;
+    lastUsed: number;
+    rateLimitUntil: number;
+    consecutiveFailures: number;
+}
+
 export class AutoModerationService {
     private static instance: AutoModerationService;
     private client!: Client;
     private queue: AutoModerationMessage[] = [];
     private isProcessing = false;
-    private testedTokens = new Map<string, number>();
+    private tokens: Map<string, TokenInfo> = new Map();
+    private currentTokenIndex = 0;
+    private maxConcurrentRequests = 3;
+    private activeRequests = 0;
 
-    private constructor() {}
+    private constructor() {
+        this.initializeTokens();
+    }
 
     public static getInstance(): AutoModerationService {
         if (!AutoModerationService.instance) {
             AutoModerationService.instance = new AutoModerationService();
         }
         return AutoModerationService.instance;
+    }
+
+    private initializeTokens() {
+        const apiKeys = config.geminiConfig.apiKey.split(',').map(key => key.trim()).filter(key => key.length > 0);
+        
+        if (apiKeys.length === 0) {
+            console.warn('[AutoModeration] No API keys configured');
+            return;
+        }
+
+        console.log(`[AutoModeration] Initialized ${apiKeys.length} API keys`);
+        
+        apiKeys.forEach((token, index) => {
+            this.tokens.set(token, {
+                token,
+                lastUsed: 0,
+                rateLimitUntil: 0,
+                consecutiveFailures: 0
+            });
+        });
     }
 
     public setClient(client: Client) {
@@ -84,17 +116,21 @@ export class AutoModerationService {
         this.isProcessing = true;
 
         while (this.isProcessing) {
+            if (this.activeRequests >= this.maxConcurrentRequests) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                continue;
+            }
+
             const nextMessage = this.queue.shift();
             if (!nextMessage) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 continue;
             }
 
-            try {
-                await this.processMessage(nextMessage);
-            } catch (error) {
-                console.error('[AutoModeration] Error processing message:', error);
-            }
+            this.activeRequests++;
+            this.processMessage(nextMessage).finally(() => {
+                this.activeRequests--;
+            });
         }
     }
 
@@ -106,17 +142,9 @@ export class AutoModerationService {
             return;
         }
 
-        // Clean up old tested tokens (older than 1 minute)
-        const now = Date.now();
-        for (const [token, timestamp] of this.testedTokens.entries()) {
-            if (now - timestamp > 60000) {
-                this.testedTokens.delete(token);
-            }
-        }
-
         const apiToken = this.getAvailableToken();
         if (!apiToken) {
-            console.warn('[AutoModeration] No available API tokens');
+            console.warn('[AutoModeration] No available API tokens, skipping message');
             return;
         }
 
@@ -148,21 +176,36 @@ export class AutoModerationService {
                 }
             );
 
+            if (response.status === 429) {
+                // Rate limited - mark token as rate limited
+                this.markTokenRateLimited(apiToken);
+                console.warn(`[AutoModeration] Token rate limited, will retry with different token`);
+                
+                // Re-queue the message for retry
+                setTimeout(() => {
+                    this.queue.unshift(autoModMessage);
+                }, 1000);
+                return;
+            }
+
             if (!response.ok) {
-                this.testedTokens.set(apiToken, now);
-                throw new Error(`API request failed: ${response.status}`);
+                this.markTokenFailure(apiToken);
+                throw new Error(`API request failed: ${response.status} ${response.statusText}`);
             }
 
             const geminiResponse: GeminiResponse = await response.json();
             const prediction = this.extractFirstNumber(geminiResponse);
             
             if (prediction !== null) {
+                this.markTokenSuccess(apiToken);
                 callback(prediction);
+            } else {
+                this.markTokenFailure(apiToken);
             }
 
         } catch (error) {
             console.error('[AutoModeration] Error calling Gemini API:', error);
-            this.testedTokens.set(apiToken, now);
+            this.markTokenFailure(apiToken);
         }
     }
 
@@ -179,8 +222,72 @@ export class AutoModerationService {
     }
 
     private getAvailableToken(): string | null {
-        const tokens = config.geminiConfig.apiKey.split(',').map((t: string) => t.trim());
-        return tokens.find((token: string) => !this.testedTokens.has(token)) || null;
+        const now = Date.now();
+        const availableTokens: string[] = [];
+
+        // Find all available tokens
+        for (const [token, info] of this.tokens.entries()) {
+            if (now >= info.rateLimitUntil && info.consecutiveFailures < 3) {
+                availableTokens.push(token);
+            }
+        }
+
+        if (availableTokens.length === 0) {
+            // If no tokens are available, reset all tokens after a longer delay
+            const resetTime = now + 60000; // 1 minute
+            for (const [token, info] of this.tokens.entries()) {
+                if (now >= info.rateLimitUntil + 60000) {
+                    info.rateLimitUntil = 0;
+                    info.consecutiveFailures = 0;
+                    availableTokens.push(token);
+                }
+            }
+        }
+
+        if (availableTokens.length === 0) {
+            return null;
+        }
+
+        // Use round-robin selection from available tokens
+        const selectedToken = availableTokens[this.currentTokenIndex % availableTokens.length];
+        this.currentTokenIndex = (this.currentTokenIndex + 1) % availableTokens.length;
+        
+        return selectedToken;
+    }
+
+    private markTokenSuccess(token: string) {
+        const info = this.tokens.get(token);
+        if (info) {
+            info.lastUsed = Date.now();
+            info.consecutiveFailures = 0;
+            info.rateLimitUntil = 0;
+        }
+    }
+
+    private markTokenFailure(token: string) {
+        const info = this.tokens.get(token);
+        if (info) {
+            info.lastUsed = Date.now();
+            info.consecutiveFailures++;
+            
+            // Exponential backoff: 2^failures seconds
+            const backoffSeconds = Math.min(Math.pow(2, info.consecutiveFailures), 60);
+            info.rateLimitUntil = Date.now() + (backoffSeconds * 1000);
+            
+            console.log(`[AutoModeration] Token ${token.substring(0, 10)}... failed ${info.consecutiveFailures} times, backing off for ${backoffSeconds}s`);
+        }
+    }
+
+    private markTokenRateLimited(token: string) {
+        const info = this.tokens.get(token);
+        if (info) {
+            info.lastUsed = Date.now();
+            info.consecutiveFailures++;
+            // Rate limit backoff: 30 seconds minimum
+            info.rateLimitUntil = Date.now() + 30000;
+            
+            console.log(`[AutoModeration] Token ${token.substring(0, 10)}... rate limited, backing off for 30s`);
+        }
     }
 
     public async handleToxicMessage(message: Message, toxicityScore: number) {
@@ -329,6 +436,54 @@ export class AutoModerationService {
             console.error(`[AutoModeration] Error checking punishment logs channel:`, error);
             return false;
         }
+    }
+
+    public getTokenStatus(): { total: number; available: number; rateLimited: number; failed: number } {
+        const now = Date.now();
+        let available = 0;
+        let rateLimited = 0;
+        let failed = 0;
+
+        for (const [token, info] of this.tokens.entries()) {
+            if (now >= info.rateLimitUntil && info.consecutiveFailures < 3) {
+                available++;
+            } else if (info.consecutiveFailures >= 3) {
+                failed++;
+            } else {
+                rateLimited++;
+            }
+        }
+
+        return {
+            total: this.tokens.size,
+            available,
+            rateLimited,
+            failed
+        };
+    }
+
+    public getDetailedTokenStatus(): Array<{ token: string; status: string; lastUsed: number; failures: number; backoffUntil: number }> {
+        const now = Date.now();
+        const status: Array<{ token: string; status: string; lastUsed: number; failures: number; backoffUntil: number }> = [];
+
+        for (const [token, info] of this.tokens.entries()) {
+            let statusStr = 'available';
+            if (info.consecutiveFailures >= 3) {
+                statusStr = 'failed';
+            } else if (now < info.rateLimitUntil) {
+                statusStr = 'rate_limited';
+            }
+
+            status.push({
+                token: token.substring(0, 10) + '...',
+                status: statusStr,
+                lastUsed: info.lastUsed,
+                failures: info.consecutiveFailures,
+                backoffUntil: info.rateLimitUntil
+            });
+        }
+
+        return status;
     }
 
     public stop() {

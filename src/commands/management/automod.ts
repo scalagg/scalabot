@@ -34,6 +34,11 @@ export const data = new SlashCommandBuilder()
             .setName('check-logs')
             .setDescription('Check if punishment logs channel is properly configured')
     )
+    .addSubcommand(subcommand =>
+        subcommand
+            .setName('token-status')
+            .setDescription('Check the status of all API tokens')
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -68,6 +73,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
             await testMessage(interaction);
         } else if (subcommand === 'check-logs') {
             await checkLogs(interaction);
+        } else if (subcommand === 'token-status') {
+            await showTokenStatus(interaction);
         }
 
     } catch (error) {
@@ -241,4 +248,38 @@ async function checkLogs(interaction: ChatInputCommandInteraction) {
             content: '❌ An error occurred while checking the logs channel configuration.'
         });
     }
-} 
+}
+
+async function showTokenStatus(interaction: ChatInputCommandInteraction) {
+    const tokenStatus = autoModerationService.getTokenStatus();
+    const detailedStatus = autoModerationService.getDetailedTokenStatus();
+    
+    const embed = new EmbedBuilder()
+        .setColor(serverUtils.getColor('info'))
+        .setTitle('🔑 API Token Status')
+        .addFields(
+            { 
+                name: '📊 Summary', 
+                value: `**Total:** ${tokenStatus.total}\n**Available:** ${tokenStatus.available}\n**Rate Limited:** ${tokenStatus.rateLimited}\n**Failed:** ${tokenStatus.failed}`, 
+                inline: false 
+            }
+        )
+        .setTimestamp()
+        .setFooter(serverUtils.getFooter());
+
+    // Add detailed token information
+    if (detailedStatus.length > 0) {
+        const tokenDetails = detailedStatus.map(token => 
+            `**${token.token}** - ${token.status.toUpperCase()}\n` +
+            `Failures: ${token.failures} | Last Used: ${new Date(token.lastUsed).toLocaleTimeString()}`
+        ).join('\n\n');
+        
+        embed.addFields({
+            name: '🔍 Detailed Status',
+            value: tokenDetails.length > 1024 ? tokenDetails.substring(0, 1021) + '...' : tokenDetails,
+            inline: false
+        });
+    }
+
+    await interaction.editReply({ embeds: [embed] });
+}
