@@ -99,16 +99,29 @@ export async function verifyMinecraftUsername(username: string): Promise<{
     uuid?: string;
     error?: string;
 }> {
+    // Normalize username: trim and lowercase for API, but preserve original for display
+    const normalized = username.trim();
+    console.log(`[verifyMinecraftUsername] Input: '${username}', Normalized: '${normalized}'`);
     try {
-        const response = await fetch(`https://playerdb.co/api/player/minecraft/${username}`);
+        const response = await fetch(`https://playerdb.co/api/player/minecraft/${encodeURIComponent(normalized)}`);
         const data = await response.json() as PlayerDBResponse;
-
+        console.log(`[verifyMinecraftUsername] API response:`, data);
         if (data.code === 'player.found') {
-            return {
-                isValid: true,
-                username: data.data!.player.username, 
-                uuid: data.data!.player.id
-            };
+            // Compare ignoring case
+            if (data.data!.player.username.toLowerCase() === normalized.toLowerCase()) {
+                return {
+                    isValid: true,
+                    username: data.data!.player.username, 
+                    uuid: data.data!.player.id
+                };
+            } else {
+                // Username found, but case mismatch (should still be valid)
+                return {
+                    isValid: true,
+                    username: data.data!.player.username,
+                    uuid: data.data!.player.id
+                };
+            }
         } else {
             return {
                 isValid: false,

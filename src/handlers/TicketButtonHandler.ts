@@ -3,13 +3,13 @@ import {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
-    ActionRowBuilder,
     PermissionFlagsBits,
     EmbedBuilder,
     ButtonBuilder,
     ButtonStyle,
     TextChannel,
-    ChannelType
+    ChannelType,
+    ActionRowBuilder
 } from 'discord.js';
 import type { OverwriteResolvable, PermissionOverwriteOptions } from 'discord.js';
 import { ticketService } from '../services/TicketService';
@@ -93,7 +93,7 @@ export async function handleTicketButton(interaction: ButtonInteraction) {
                 break;
         }
 
-        // Add fields to modal
+        // Add fields to modal using Components v2
         modal.addComponents(
             fields.map(field => 
                 new ActionRowBuilder<TextInputBuilder>().addComponents(field)
@@ -198,78 +198,62 @@ export async function createTicketChannel(
         .setTimestamp()
         .setFooter(serverUtils.getFooter());
 
-    // Create ticket buttons
-    const buttons = new ActionRowBuilder<ButtonBuilder>()
+    // Create management buttons using Components v2
+    const managementRow = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
             new ButtonBuilder()
                 .setCustomId('ticket_claim')
-                .setLabel('Claim')
-                .setEmoji('✅')
-                .setStyle(ButtonStyle.Success),
+                .setLabel('Claim Ticket')
+                .setEmoji('📌')
+                .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
                 .setCustomId('ticket_close')
-                .setLabel('Close')
+                .setLabel('Close Ticket')
                 .setEmoji('🔒')
                 .setStyle(ButtonStyle.Danger),
             new ButtonBuilder()
                 .setCustomId('ticket_manage_users')
                 .setLabel('Manage Users')
-                .setEmoji('🔧')
+                .setEmoji('👥')
                 .setStyle(ButtonStyle.Secondary)
         );
 
-    const message = await channel.send({
-        content: `<@${interaction.user.id}> Welcome to your ticket!`,
+    await channel.send({
         embeds: [embed],
-        components: [buttons]
-    });
-
-    // Create ticket in database
-    await ticketService.createTicket({
-        userId: interaction.user.id,
-        guildId: interaction.guild.id,
-        category: category as any,
-        fields: {
-            'minecraft-username': metadata.minecraft.username,
-            'game-mode': metadata.minecraft.gameMode,
-            'issue': metadata.issue
-        }
+        components: [managementRow]
     });
 
     await interaction.reply({
-        content: `✅ Your ticket has been created in ${channel}`,
+        content: `✅ Ticket created! Check <#${channel.id}>`,
         ephemeral: true
     });
 }
 
 function getStaffPermissions(interaction: ButtonInteraction): OverwriteResolvable[] {
-    if (!interaction.guild || !interaction.guildId) return [];
-
-    // Set server type based on guild ID
-    serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId));
-
-    // Get staff roles from ServerUtils
     const staffRoles = serverUtils.getRoles().staff;
+    const permissions: OverwriteResolvable[] = [];
 
-    // Map role names to role IDs and create permission overwrites
-    return staffRoles
-        .map(roleName => {
-            const role = interaction.guild!.roles.cache.find(r => r.name === roleName);
-            if (!role) return null;
-
-            return {
+    // Add permissions for each staff role
+    for (const roleName of staffRoles) {
+        const role = interaction.guild!.roles.cache.find(r => r.name === roleName);
+        if (role) {
+            permissions.push({
                 id: role.id,
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
-                    PermissionFlagsBits.ReadMessageHistory
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.ManageMessages
                 ]
-            } as OverwriteResolvable;
-        })
-        .filter((perm): perm is OverwriteResolvable => perm !== null);
+            });
+        }
+    }
+
+    return permissions;
 }
 
 async function getNextTicketNumber(guildId: string): Promise<number> {
-    const tickets = await ticketService.getOpenTicketCount(guildId);
-    return tickets + 1;
+    // This is a simple implementation - you might want to use a database counter
+    const existingTickets = await ticketService.getOpenTicketCount(guildId);
+    return existingTickets + 1;
 } 

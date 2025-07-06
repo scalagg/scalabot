@@ -1,7 +1,6 @@
 import {
     ButtonInteraction,
     EmbedBuilder,
-    ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
     StringSelectMenuBuilder,
@@ -18,7 +17,8 @@ import {
     APIButtonComponent,
     MessageActionRowComponentBuilder,
     ModalSubmitInteraction,
-    Interaction
+    Interaction,
+    ActionRowBuilder
 } from 'discord.js';
 import { ticketService } from '../services/TicketService';
 import { transcriptService } from '../services/TranscriptService';
@@ -151,7 +151,7 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                 // Check if ticket is claimed
                 const isUnclaimed = !ticket.claimedBy;
                 
-                const row = new ActionRowBuilder<ButtonBuilder>()
+                const closeRow = new ActionRowBuilder<ButtonBuilder>()
                     .addComponents(
                         new ButtonBuilder()
                             .setCustomId('ticket_close_with_rating')
@@ -179,7 +179,7 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
 
                 await interaction.reply({
                     embeds: [warningEmbed],
-                    components: [row],
+                    components: [closeRow],
                     flags: 1 << 6
                 });
                 break;
@@ -198,113 +198,89 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                 const manageUsersEmbed = new EmbedBuilder()
                     .setColor(serverUtils.getColor('primary'))
                     .setTitle('🔧 What do you want to do?')
-                    .setDescription('You can either add or remove a user from the ticket.')
+                    .setDescription('Select an action to manage users in this ticket.')
                     .setFooter(serverUtils.getFooter());
 
-                const manageUsersRow = new ActionRowBuilder<ButtonBuilder>()
+                const manageRow = new ActionRowBuilder<ButtonBuilder>()
                     .addComponents(
                         new ButtonBuilder()
                             .setCustomId('ticket_add_user')
-                            .setLabel('Add user')
+                            .setLabel('Add User')
+                            .setEmoji('➕')
                             .setStyle(ButtonStyle.Success),
                         new ButtonBuilder()
                             .setCustomId('ticket_remove_user')
-                            .setLabel('Remove user')
+                            .setLabel('Remove User')
+                            .setEmoji('➖')
                             .setStyle(ButtonStyle.Danger)
                     );
 
                 await interaction.reply({
                     embeds: [manageUsersEmbed],
-                    components: [manageUsersRow],
+                    components: [manageRow],
                     flags: 1 << 6
                 });
                 break;
 
             case 'ticket_add_user':
-                // Check if user has permission to manage users
-                if (!serverUtils.hasAdminOrHigherRole(interaction.member) && 
-                    ticket.claimedBy !== interaction.user.id) {
-                    await interaction.reply({
-                        content: '❌ Only the staff member who claimed the ticket or administrators can manage users',
-                        flags: 1 << 6
-                    });
-                    return;
-                }
-
-                // Create modal for user input
-                const modal = new ModalBuilder()
+                // Show modal to add user
+                const addUserModal = new ModalBuilder()
                     .setCustomId('ticket_add_user_modal')
                     .setTitle('Add User to Ticket');
 
                 const userInput = new TextInputBuilder()
-                    .setCustomId('user_input')
-                    .setLabel('Enter username or ID')
-                    .setPlaceholder('Enter username (e.g. Pawful) or ID (e.g. 1057312650381504543)')
+                    .setCustomId('user_id')
+                    .setLabel('User ID or @mention')
                     .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('Enter user ID or @mention')
                     .setRequired(true);
 
-                const firstActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(userInput);
-                modal.addComponents(firstActionRow);
+                addUserModal.addComponents(
+                    new ActionRowBuilder<TextInputBuilder>().addComponents(userInput)
+                );
 
-                await interaction.showModal(modal);
+                await interaction.showModal(addUserModal);
                 break;
 
             case 'ticket_remove_user':
-                // Check if user has permission to manage users
-                if (!serverUtils.hasAdminOrHigherRole(interaction.member) && 
-                    ticket.claimedBy !== interaction.user.id) {
+                // Get available users for this ticket
+                const availableUsers = await ticketService.getAvailableUsersForTicket(interaction.guildId!, ticket);
+                
+                if (availableUsers.length === 0) {
                     await interaction.reply({
-                        content: '❌ Only the staff member who claimed the ticket or administrators can manage users',
+                        content: '❌ No users available to remove from this ticket.',
                         flags: 1 << 6
                     });
                     return;
                 }
 
-                if (!ticket.additionalUsers?.length) {
-                    await interaction.reply({
-                        content: '❌ No users to remove from the ticket',
-                        flags: 1 << 6
-                    });
-                    return;
-                }
-
-                const removeUserEmbed = new EmbedBuilder()
-                    .setColor(serverUtils.getColor('primary'))
-                    .setTitle('🔧 Remove user')
-                    .setDescription('Please, select the user you want to remove from the ticket.')
-                    .setFooter(serverUtils.getFooter());
-
-                const removeUserSelect = new ActionRowBuilder<StringSelectMenuBuilder>()
-                    .addComponents(
-                        new StringSelectMenuBuilder()
-                            .setCustomId('ticket_remove_user_select')
-                            .setPlaceholder('Select a user here...')
-                            .addOptions(
-                                ticket.additionalUsers.map(userId => {
-                                    const member = interaction.guild?.members.cache.get(userId);
-                                    return {
-                                        label: member?.displayName || userId,
-                                        value: userId,
-                                        description: member?.user.tag || 'Unknown User'
-                                    };
-                                })
-                            )
+                const removeUserSelect = new StringSelectMenuBuilder()
+                    .setCustomId('ticket_remove_user_select')
+                    .setPlaceholder('Select a user to remove')
+                    .addOptions(
+                        availableUsers.map(user => ({
+                            label: user.user.username,
+                            value: user.id,
+                            description: `Remove ${user.user.username} from the ticket`
+                        }))
                     );
 
+                const removeUserRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+                    .addComponents(removeUserSelect);
+
                 await interaction.reply({
-                    embeds: [removeUserEmbed],
-                    components: [removeUserSelect],
+                    content: 'Select a user to remove from the ticket:',
+                    components: [removeUserRow],
                     flags: 1 << 6
                 });
                 break;
-
-            // ... rest of the cases
         }
+
     } catch (error) {
-        console.error('[ERROR] Ticket management error:', error);
-        await interaction.reply({ 
-            content: '❌ An error occurred', 
-            flags: 1 << 6 
+        console.error('[TicketManagement] Error handling interaction:', error);
+        await interaction.reply({
+            content: '❌ An error occurred while processing your request.',
+            flags: 1 << 6
         });
     }
 }
@@ -549,7 +525,7 @@ export async function handleAddUserModal(interaction: ModalSubmitInteraction) {
         }
 
         // Get the user input
-        const userInput = interaction.fields.getTextInputValue('user_input');
+        const userInput = interaction.fields.getTextInputValue('user_id');
 
         // Try to find the user
         let member;

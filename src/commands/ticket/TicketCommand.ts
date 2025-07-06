@@ -2,12 +2,12 @@ import {
     SlashCommandBuilder, 
     PermissionFlagsBits,
     EmbedBuilder,
-    ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
     ChatInputCommandInteraction,
     ColorResolvable,
-    TextChannel
+    TextChannel,
+    ActionRowBuilder
 } from 'discord.js';
 import { serverUtils } from '../../utils/ServerUtils';
 
@@ -57,7 +57,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     // Set server type based on guild ID
-    serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId));
+    serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
 
     const embed = new EmbedBuilder()
         .setColor(serverUtils.getColor('primary'))
@@ -66,6 +66,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         .setTimestamp()
         .setFooter(serverUtils.getFooter());
 
+    // Using Components v2 - create action row with buttons
     const row = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
             new ButtonBuilder()
