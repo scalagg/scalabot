@@ -392,10 +392,11 @@ export class WelcomeService {
         const yearsAgo = Math.floor((Date.now() - member.user.createdAt.getTime()) / (1000 * 60 * 60 * 24 * 365));
         ctx.fillText(`${createdDate} (${yearsAgo} years ago)`, startX, 420);
         ctx.globalAlpha = 1;
-        ctx.font = '20px Roboto';
-        ctx.fillStyle = '#FFFFFF';
-        ctx.textAlign = 'right';
-        ctx.fillText(`Member #${memberCount}`, 565, 350);
+        // Move member count to bottom left, styled nicely
+        ctx.font = '18px Roboto';
+        ctx.fillStyle = '#BBBBBB';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Member #${memberCount}`, startX, 455);
     }
 
     private async drawRankString(ctx: any, text: string, rankColor: string, x: number, y: number): Promise<void> {
