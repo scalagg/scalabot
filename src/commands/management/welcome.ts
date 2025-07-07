@@ -164,13 +164,28 @@ async function testWelcome(interaction: ChatInputCommandInteraction) {
         } else {
             console.log('[WelcomeCommand][DEBUG] No active grants found, using Default rank.');
         }
+        // Fetch level from coreplayerprofile endpoint
+        let level: number | undefined = undefined;
+        try {
+            const coreProfileRes = await fetch(`${config.apiBaseUrl}/coreplayerprofile/${uuid}`, {
+                headers: { Authorization: config.apiKey }
+            });
+            if (coreProfileRes.ok) {
+                const coreProfile: any = await coreProfileRes.json();
+                if (typeof coreProfile.level === 'number') {
+                    level = coreProfile.level;
+                }
+            }
+        } catch (err) {
+            console.warn('[WelcomeCommand] Error fetching coreplayerprofile for level:', err);
+        }
         // Use the public WelcomeService method for MC data
         const imageBuffer = await welcomeService.generateTestImage(member, {
             username: profile.name,
             uuid: profile.uniqueId,
             rank: rank,
             rankColor: rankColor,
-            level: undefined,
+            level: level,
             guild: undefined,
             guildTag: undefined,
             firstJoin: profile.metadata && profile.metadata['first-connection'] ? new Date(Number(profile.metadata['first-connection'].value)) : undefined

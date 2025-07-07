@@ -162,6 +162,21 @@ export class WelcomeService {
                 headers: { Authorization: config.apiKey }
             });
             const grants: any[] = grantsRes.ok ? (await grantsRes.json() as any[]) : [];
+            // Fetch level from coreplayerprofile endpoint
+            let level: number | undefined = undefined;
+            try {
+                const coreProfileRes = await fetch(`${config.apiBaseUrl}/coreplayerprofile/${uuid}`, {
+                    headers: { Authorization: config.apiKey }
+                });
+                if (coreProfileRes.ok) {
+                    const coreProfile: any = await coreProfileRes.json();
+                    if (typeof coreProfile.level === 'number') {
+                        level = coreProfile.level;
+                    }
+                }
+            } catch (err) {
+                console.warn('[WelcomeService] Error fetching coreplayerprofile for level:', err);
+            }
             console.log('[WelcomeService][DEBUG] Profile:', profile.name, profile.uniqueId);
             console.log('[WelcomeService][DEBUG] Grants:', grants);
             // Find highest-weight active grant
@@ -229,7 +244,7 @@ export class WelcomeService {
                 uuid: profile.uniqueId,
                 rank,
                 rankColor,
-                level: undefined,
+                level,
                 guild: undefined,
                 guildTag: undefined,
                 firstJoin
