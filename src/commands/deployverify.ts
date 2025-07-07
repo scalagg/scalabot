@@ -19,6 +19,7 @@ import { redisService } from '../services/RedisService';
 import { mongoService } from '../services/MongoService';
 import { getMinecraftUsername } from '../utils/minecraftUtils';
 import { PunishmentService } from '../services/PunishmentService';
+import { welcomeService } from '../services/WelcomeService';
 
 interface DiscordProfile {
     _id: string;
@@ -276,6 +277,18 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
             embeds: [successEmbed],
             flags: 1 << 6
         });
+
+        // Send welcome message after successful verification
+        if (interaction.guild && interaction.member instanceof GuildMember) {
+            try {
+                console.log('[DiscordBot] [DEBUG] Sending welcome message for verified user:', interaction.user.tag);
+                await welcomeService.handleVerificationWelcome(interaction.member, minecraftUsername, uuid);
+                console.log('[DiscordBot] [DEBUG] Welcome message sent successfully');
+            } catch (welcomeError) {
+                console.error('[DiscordBot] [ERROR] Failed to send welcome message:', welcomeError);
+                // Don't fail the verification if welcome message fails
+            }
+        }
 
         console.log('[DiscordBot] [DEBUG] Verification completed successfully for user:', interaction.user.tag, 'with UUID:', uuid, 'and Minecraft Username:', minecraftUsername);
 

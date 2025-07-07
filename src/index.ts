@@ -41,6 +41,7 @@ import * as franc from 'franc';
 import { translationService } from './services/TranslationService';
 import { filterService } from './services/FilterService';
 import { pingProtectionService } from './services/PingProtectionService';
+import { welcomeService } from './services/WelcomeService';
 
 // Create Discord client
 const client = new Client({
@@ -107,7 +108,11 @@ client.once(Events.ClientReady, async (readyClient) => {
         await pingProtectionService.initialize();
         console.log('Ping protection service initialized');
 
-        // 10. Initialize commands last
+        // 10. Initialize welcome service
+        welcomeService.setClient(client);
+        console.log('Welcome service initialized');
+
+        // 11. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 
@@ -345,6 +350,9 @@ client.on(Events.MessageCreate, async (message: Message) => {
         console.error('[AutoModeration/Translation] Error handling message:', error);
     }
 });
+
+// Note: Welcome messages are now sent after successful verification, not on join
+// This prevents spam and ensures only verified users get welcome messages
 
 // Login to Discord
 client.login(config.token);

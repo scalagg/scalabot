@@ -229,9 +229,11 @@ export class LoggingService {
             const logChannel = await this.getLogChannel(member.guild);
             if (!logChannel) return;
 
+            // Only log to admin channel, don't send welcome message
+            // Welcome messages are handled by the dedicated WelcomeService
             const embed = new EmbedBuilder()
-                .setColor(serverUtils.getColor('success'))
-                .setTitle('👋 Member Joined')
+                .setColor(serverUtils.getColor('info'))
+                .setTitle('📊 Member Joined (Log)')
                 .setDescription(`${member.user.tag} has joined the server`)
                 .addFields(
                     { name: '👤 User', value: `${member.user.tag} (<@${member.user.id}>)`, inline: true },
