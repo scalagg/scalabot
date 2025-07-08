@@ -8,7 +8,11 @@ import {
     StringSelectMenuInteraction,
     TextChannel,
     Partials,
-    Message
+    Message,
+    GuildMember,
+    GuildBan,
+    Channel,
+    Role
 } from 'discord.js';
 import type { 
     Interaction,
@@ -44,6 +48,8 @@ import { translationService } from './services/TranslationService';
 import { filterService } from './services/FilterService';
 import { pingProtectionService } from './services/PingProtectionService';
 import { welcomeService } from './services/WelcomeService';
+import { antiRaidService } from './services/AntiRaidService';
+import { antiNukeService } from './services/AntiNukeService';
 import { data as roleMenuData, execute as roleMenuExecute } from './commands/management/rolemenu';
 
 // Create Discord client
@@ -115,7 +121,17 @@ client.once(Events.ClientReady, async (readyClient) => {
         welcomeService.setClient(client);
         console.log('Welcome service initialized');
 
-        // 11. Initialize commands last
+        // 11. Initialize anti-raid service
+        antiRaidService.setClient(client);
+        await antiRaidService.initialize();
+        console.log('Anti-raid service initialized');
+
+        // 12. Initialize anti-nuke service
+        antiNukeService.setClient(client);
+        await antiNukeService.initialize();
+        console.log('Anti-nuke service initialized');
+
+        // 13. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 
@@ -191,6 +207,10 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
                     await handleHistoryButton(buttonInteraction);
                 }
             }
+            // Handle anti-raid verification buttons
+            else if (buttonInteraction.customId === 'heightened_verify') {
+                await antiRaidService.handleVerificationButton(buttonInteraction);
+            }
         }
         else if (interaction.isModalSubmit()) {
             const modalInteraction = interaction as ModalSubmitInteraction;
@@ -200,6 +220,8 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
                 await handleTicketModal(modalInteraction);
             } else if (modalInteraction.customId === 'ticket_add_user_modal') {
                 await handleAddUserModal(modalInteraction);
+            } else if (modalInteraction.customId === 'heightened_verification_modal') {
+                await antiRaidService.handleVerificationModal(modalInteraction);
             }
         }
         else if (interaction.isStringSelectMenu()) {
@@ -390,6 +412,93 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
     } catch (error) {
         console.error('[AutoModeration/Translation] Error handling message:', error);
+    }
+});
+
+// Handle anti-raid events
+client.on(Events.GuildMemberAdd, async (member: GuildMember) => {
+    try {
+        // Check if services are initialized
+        if (!isInitialized) {
+            return;
+        }
+
+        // Skip if anti-raid is disabled
+        if (!config.antiRaidConfig.enabled) {
+            return;
+        }
+
+        await antiRaidService.handleMemberJoin(member);
+    } catch (error) {
+        console.error('[AntiRaid] Error handling member join:', error);
+    }
+});
+
+// Handle anti-nuke events
+client.on(Events.GuildBanAdd, async (ban: GuildBan) => {
+    try {
+        if (!isInitialized || !config.antiNukeConfig.enabled) return;
+        await antiNukeService.handleGuildBanAdd(ban);
+    } catch (error) {
+        console.error('[AntiNuke] Error handling guild ban add:', error);
+    }
+});
+
+client.on(Events.GuildMemberRemove, async (member: GuildMember | any) => {
+    try {
+        if (!isInitialized || !config.antiNukeConfig.enabled) return;
+        if (member instanceof GuildMember) {
+            await antiNukeService.handleGuildMemberRemove(member);
+        }
+    } catch (error) {
+        console.error('[AntiNuke] Error handling guild member remove:', error);
+    }
+});
+
+client.on(Events.ChannelDelete, async (channel: Channel) => {
+    try {
+        if (!isInitialized || !config.antiNukeConfig.enabled) return;
+        await antiNukeService.handleChannelDelete(channel);
+    } catch (error) {
+        console.error('[AntiNuke] Error handling channel delete:', error);
+    }
+});
+
+client.on(Events.ChannelCreate, async (channel: Channel) => {
+    try {
+        if (!isInitialized || !config.antiNukeConfig.enabled) return;
+        await antiNukeService.handleChannelCreate(channel);
+    } catch (error) {
+        console.error('[AntiNuke] Error handling channel create:', error);
+    }
+});
+
+client.on(Events.GuildRoleDelete, async (role: Role) => {
+    try {
+        if (!isInitialized || !config.antiNukeConfig.enabled) return;
+        await antiNukeService.handleRoleDelete(role);
+    } catch (error) {
+        console.error('[AntiNuke] Error handling role delete:', error);
+    }
+});
+
+client.on(Events.GuildRoleCreate, async (role: Role) => {
+    try {
+        if (!isInitialized || !config.antiNukeConfig.enabled) return;
+        await antiNukeService.handleRoleCreate(role);
+    } catch (error) {
+        console.error('[AntiNuke] Error handling role create:', error);
+    }
+});
+
+client.on(Events.GuildMemberUpdate, async (oldMember: GuildMember | any, newMember: GuildMember) => {
+    try {
+        if (!isInitialized || !config.antiNukeConfig.enabled) return;
+        if (oldMember instanceof GuildMember && newMember instanceof GuildMember) {
+            await antiNukeService.handleGuildMemberUpdate(oldMember, newMember);
+        }
+    } catch (error) {
+        console.error('[AntiNuke] Error handling guild member update:', error);
     }
 });
 

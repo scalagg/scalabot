@@ -22,6 +22,24 @@ interface BotConfig {
     muteThreshold: number;
     enabled: boolean;
   };
+  antiRaid?: {
+    enabled: boolean;
+    joinThreshold: number;
+    timeWindow: number;
+    newAccountThreshold: number;
+    suspiciousUsernamePatterns: string[];
+  };
+  antiNuke?: {
+    enabled: boolean;
+    massBanThreshold: number;
+    massKickThreshold: number;
+    massChannelDeleteThreshold: number;
+    massRoleDeleteThreshold: number;
+    massChannelCreateThreshold: number;
+    massRoleCreateThreshold: number;
+    timeWindow: number;
+    permissionEscalationRoles: string[];
+  };
   welcomeImage?: {
     backgroundPath?: string;
     guildName?: string;
@@ -148,6 +166,57 @@ class Config {
   public get deeplApiKey(): string | undefined {
     return this.config.deeplApiKey;
   }
+
+  public get antiRaidConfig() {
+    return this.config.antiRaid || {
+      enabled: true,
+      joinThreshold: 10,
+      timeWindow: 30 * 1000, // 30 seconds
+      newAccountThreshold: 24 * 60 * 60 * 1000, // 24 hours
+      suspiciousUsernamePatterns: [
+        'discord.gg/',
+        'free.*nitro',
+        'nitro.*free',
+        'steam.*gift',
+        'gift.*steam',
+        'robux.*free',
+        'free.*robux',
+        'minecraft.*free',
+        'free.*minecraft',
+        'hack.*client',
+        'cheat.*client',
+        'crack.*client',
+        'premium.*free',
+        'free.*premium',
+        'vip.*free',
+        'free.*vip',
+        'admin.*free',
+        'free.*admin',
+        'mod.*free',
+        'free.*mod'
+      ]
+    };
+  }
+
+  public get antiNukeConfig() {
+    return this.config.antiNuke || {
+      enabled: true,
+      massBanThreshold: 3,
+      massKickThreshold: 5,
+      massChannelDeleteThreshold: 2,
+      massRoleDeleteThreshold: 2,
+      massChannelCreateThreshold: 5,
+      massRoleCreateThreshold: 5,
+      timeWindow: 10 * 1000, // 10 seconds
+      permissionEscalationRoles: [
+        'Administrator',
+        'Owner',
+        'Co-Owner',
+        'Platform Admin',
+        'System Admin'
+      ]
+    };
+  }
 }
 
 // Export a type-safe config object with all the getters
@@ -165,6 +234,8 @@ export const config = {
   get redisPassword() { return Config.getInstance().redisPassword; },
   get testGuildId() { return Config.getInstance().testGuildId; },
   get geminiConfig() { return Config.getInstance().geminiConfig; },
+  get antiRaidConfig() { return Config.getInstance().antiRaidConfig; },
+  get antiNukeConfig() { return Config.getInstance().antiNukeConfig; },
   get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; },
   get welcomeMessage() { return Config.getInstance().welcomeMessage; },
   get deeplApiKey() { return Config.getInstance().deeplApiKey; }
