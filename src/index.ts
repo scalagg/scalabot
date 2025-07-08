@@ -50,6 +50,7 @@ import { pingProtectionService } from './services/PingProtectionService';
 import { welcomeService } from './services/WelcomeService';
 import { antiRaidService } from './services/AntiRaidService';
 import { antiNukeService } from './services/AntiNukeService';
+import { autoCooldownService } from './services/AutoCooldownService';
 import { data as roleMenuData, execute as roleMenuExecute } from './commands/management/rolemenu';
 
 // Create Discord client
@@ -131,7 +132,12 @@ client.once(Events.ClientReady, async (readyClient) => {
         await antiNukeService.initialize();
         console.log('Anti-nuke service initialized');
 
-        // 13. Initialize commands last
+        // 13. Initialize auto cooldown service
+        autoCooldownService.setClient(client);
+        await autoCooldownService.initialize();
+        console.log('Auto cooldown service initialized');
+
+        // 14. Initialize commands last
         await commandLoader.initialize();
         console.log('Commands initialized');
 
@@ -409,6 +415,9 @@ client.on(Events.MessageCreate, async (message: Message) => {
                 await autoModerationService.handleToxicMessage(message, toxicityScore, translationContext);
             }
         });
+
+        // Handle auto cooldown
+        await autoCooldownService.handleMessage(message);
 
     } catch (error) {
         console.error('[AutoModeration/Translation] Error handling message:', error);

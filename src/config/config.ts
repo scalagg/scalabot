@@ -40,6 +40,14 @@ interface BotConfig {
     timeWindow: number;
     permissionEscalationRoles: string[];
   };
+  autoCooldown?: {
+    enabled: boolean;
+    spamThreshold: number;
+    timeWindow: number;
+    cooldownDuration: number;
+    autoDisableDelay: number;
+    whitelistedRoles: string[];
+  };
   welcomeImage?: {
     backgroundPath?: string;
     guildName?: string;
@@ -217,6 +225,28 @@ class Config {
       ]
     };
   }
+
+  public get autoCooldownConfig() {
+    return this.config.autoCooldown || {
+      enabled: true,
+      spamThreshold: 8,
+      timeWindow: 10 * 1000, // 10 seconds
+      cooldownDuration: 5 * 60 * 1000, // 5 minutes
+      autoDisableDelay: 10 * 60 * 1000, // 10 minutes
+      whitelistedRoles: [
+        'Owner',
+        'Co-Owner',
+        'Platform Admin',
+        'System Admin',
+        'Admin',
+        'Senior Admin',
+        'Moderator',
+        'Senior Mod',
+        'Mod+',
+        'Trial Mod'
+      ]
+    };
+  }
 }
 
 // Export a type-safe config object with all the getters
@@ -236,6 +266,7 @@ export const config = {
   get geminiConfig() { return Config.getInstance().geminiConfig; },
   get antiRaidConfig() { return Config.getInstance().antiRaidConfig; },
   get antiNukeConfig() { return Config.getInstance().antiNukeConfig; },
+  get autoCooldownConfig() { return Config.getInstance().autoCooldownConfig; },
   get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; },
   get welcomeMessage() { return Config.getInstance().welcomeMessage; },
   get deeplApiKey() { return Config.getInstance().deeplApiKey; }
