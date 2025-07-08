@@ -36,12 +36,15 @@ import { loggingService } from './services/LoggingService';
 import { handleButton } from './commands/deployverify';
 import { GiveawayButtonHandler } from './handlers/GiveawayButtonHandler';
 import { giveawayService } from './services/GiveawayService';
+import { handleButton as handleRoleMenuButton } from './handlers/ButtonHandler';
+import { roleMenuService } from './services/RoleMenuService';
 import fetch from 'node-fetch';
 import * as franc from 'franc';
 import { translationService } from './services/TranslationService';
 import { filterService } from './services/FilterService';
 import { pingProtectionService } from './services/PingProtectionService';
 import { welcomeService } from './services/WelcomeService';
+import { data as roleMenuData, execute as roleMenuExecute } from './commands/management/rolemenu';
 
 // Create Discord client
 const client = new Client({
@@ -156,11 +159,13 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             if (buttonInteraction.customId.startsWith('giveaway_')) {
                 await GiveawayButtonHandler.handle(buttonInteraction);
             }
-            // Handle verification button
-            else if (buttonInteraction.customId === 'verify-button') {
-                await handleButton(buttonInteraction);
+            // Handle role menu buttons and other general buttons
+            else if (['confirm_roles', 'remove_all_roles', 'verify-button'].includes(buttonInteraction.customId) || 
+                     buttonInteraction.customId.startsWith('ticket_') || 
+                     buttonInteraction.customId.startsWith('history_')) {
+                await handleRoleMenuButton(buttonInteraction);
             }
-            // Handle ticket creation buttons
+            // Handle ticket creation buttons specifically
             else if (buttonInteraction.customId.startsWith('ticket_') && ['general', 'staff', 'buycraft', 'punishments'].some(type => buttonInteraction.customId === `ticket_${type}`)) {
                 await handleTicketButton(buttonInteraction);
             }
@@ -198,11 +203,48 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             }
         }
         else if (interaction.isStringSelectMenu()) {
+            // Handle role menu select menu
+            if (interaction.customId === 'role_selection') {
+                const member = interaction.guild?.members.cache.get(interaction.user.id);
+                if (!member) {
+                    await interaction.reply({ content: 'Could not find your member object.', ephemeral: true });
+                    return;
+                }
+                // Get the hardcoded roles for this guild
+                const roles = roleMenuService.getRolesForGuild(interaction.guild.id);
+                // Find the actual GuildRole objects for these names
+                const roleMap = new Map(roles.map(r => [r.name, interaction.guild.roles.cache.find(gr => gr.name === r.name)]));
+                // Roles the user selected
+                const selected = new Set(interaction.values);
+                // Roles to add: selected and not already present
+                const toAdd = Array.from(selected).map(name => roleMap.get(name)).filter(r => r && !member.roles.cache.has(r.id));
+                // Roles to remove: in menu, not selected, and currently present
+                const toRemove = roles
+                    .filter(r => !selected.has(r.name))
+                    .map(r => roleMap.get(r.name))
+                    .filter(r => r && member.roles.cache.has(r.id));
+                // Add and remove roles
+                await member.roles.add(toAdd);
+                await member.roles.remove(toRemove);
+                // Build confirmation message
+                let msg = '';
+                if (toAdd.length > 0) msg += `Added: ${toAdd.map(r => `<@&${r.id}>`).join(', ')}\n`;
+                if (toRemove.length > 0) msg += `Removed: ${toRemove.map(r => `<@&${r.id}>`).join(', ')}\n`;
+                if (!msg) msg = 'No changes to your roles.';
+                await interaction.reply({ content: msg, ephemeral: true });
+                return;
+            }
             // Handle any select menu interactions here if needed
             console.log('[DEBUG] Select menu interaction:', interaction.customId);
             
+            // Handle role menu select menu
+            if (interaction.customId.startsWith('role_selection_')) {
+                // This part of the code was removed as per the edit hint.
+                // The original code had handleSelectMenu(interaction); here.
+                // Since handleSelectMenu is no longer imported, this block is effectively removed.
+            }
             // Handle history select menu
-            if (interaction.customId.startsWith('history_')) {
+            else if (interaction.customId.startsWith('history_')) {
                 const { handleHistorySelect } = await import('./commands/moderation/history');
                 await handleHistorySelect(interaction);
             }
