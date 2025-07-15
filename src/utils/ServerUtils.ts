@@ -39,7 +39,7 @@ interface ServerConfig {
 
 const SCALA_CONFIG: ServerConfig = {
     theme: {
-        primary: '#7289DA' as ColorResolvable,    // Discord blurple
+        primary: '#ffce00' as ColorResolvable,    // Gold 
         success: '#43B581' as ColorResolvable,    // Green
         error: '#F04747' as ColorResolvable,      // Red
         warning: '#FAA61A' as ColorResolvable,    // Orange
@@ -51,36 +51,40 @@ const SCALA_CONFIG: ServerConfig = {
         website: 'https://scala.gg',
         ip: 'scala.gg',
         store: 'store.scala.gg',
-        discord: 'discord.scala.gg',
+        discord: 'discord.gg/potpvp',
         logo: 'https://i.imgur.com/JGiC6hP.png'
     },
     roles: {
         staff: [
-            'Learner',
-            'Trial Mod',
-            'Mod',
-            'Mod+',
-            'Senior Mod',
-            'Admin',
+            'Permissions',
+            'Robot Permissions',
+            'Owner',
+            'Developer',
+            'Manager',
             'Senior Admin',
-            'System Admin',
-            'Platform Admin',
-            'Co-Owner',
-            'Owner'
+            'Network Admin',
+            'Admin',
+            'Senior Mod',
+            'Moderator',
+            'Trainee',
+            'Staff'
         ],
         admin: [
-            'Admin',
+            'Permissions',
+            'Robot Permissions',
+            'Owner',
+            'Developer',
+            'Manager',
             'Senior Admin',
-            'System Admin',
-            'Platform Admin',
-            'Co-Owner',
-            'Owner'
+            'Network Admin',
+            'Admin'
         ],
         manager: [
-            'Platform Admin',
-            'System Admin',
-            'Co-Owner',
-            'Owner'
+            'Permissions',
+            'Robot Permissions',
+            'Owner',
+            'Developer',
+            'Manager'
         ]
     }
 };
@@ -217,17 +221,18 @@ export class ServerUtils {
         return this.serverType === ServerType.SCALA ?
         // Scala role hierarchy
         [
+            'Permissions',
+            'Robot Permissions',
             'Owner',
-            'Co-Owner',
-            'Platform Admin',
-            'System Admin',
+            'Developer',
+            'Manager',
             'Senior Admin',
+            'Network Admin',
             'Admin',
             'Senior Mod',
-            'Mod+',
-            'Mod',
-            'Trial Mod',
-            'Learner'
+            'Moderator',
+            'Trainee',
+            'Staff'
         ] : 
         // HolyPvP role hierarchy
         [

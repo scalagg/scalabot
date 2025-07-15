@@ -28,6 +28,7 @@ export async function handleTicketButton(interaction: ButtonInteraction) {
 
         // Create the modal based on the category
         const category = interaction.customId.split('_')[1];
+        
         const modal = new ModalBuilder()
             .setCustomId(`ticket-${category}`)
             .setTitle(`${category.charAt(0).toUpperCase() + category.slice(1)} Support Ticket`);
@@ -218,7 +219,20 @@ export async function createTicketChannel(
                 .setStyle(ButtonStyle.Secondary)
         );
 
+    // Create ping message for staff and user
+    const staffRoles = serverUtils.getRoles().staff;
+    const staffPings = staffRoles
+        .map(roleName => {
+            const role = interaction.guild!.roles.cache.find(r => r.name === roleName);
+            return role ? `<@&${role.id}>` : null;
+        })
+        .filter(Boolean)
+        .join(' ');
+
+    const pingMessage = `🎫 **New Ticket Created!**\n\n👤 **User:** <@${interaction.user.id}>\n👥 **Staff Team:** ${staffPings}\n\nPlease respond to this ticket as soon as possible.`;
+
     await channel.send({
+        content: pingMessage,
         embeds: [embed],
         components: [managementRow]
     });

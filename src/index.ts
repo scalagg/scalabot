@@ -181,15 +181,14 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             if (buttonInteraction.customId.startsWith('giveaway_')) {
                 await GiveawayButtonHandler.handle(buttonInteraction);
             }
-            // Handle role menu buttons and other general buttons
-            else if (['confirm_roles', 'remove_all_roles', 'verify-button'].includes(buttonInteraction.customId) || 
-                     buttonInteraction.customId.startsWith('ticket_') || 
-                     buttonInteraction.customId.startsWith('history_')) {
-                await handleRoleMenuButton(buttonInteraction);
-            }
-            // Handle ticket creation buttons specifically
+            // Handle ticket creation buttons specifically (must come before general ticket handling)
             else if (buttonInteraction.customId.startsWith('ticket_') && ['general', 'staff', 'buycraft', 'punishments'].some(type => buttonInteraction.customId === `ticket_${type}`)) {
                 await handleTicketButton(buttonInteraction);
+            }
+            // Handle role menu buttons and other general buttons
+            else if (['confirm_roles', 'remove_all_roles', 'verify-button'].includes(buttonInteraction.customId) || 
+                     buttonInteraction.customId.startsWith('history_')) {
+                await handleRoleMenuButton(buttonInteraction);
             }
             // Handle close confirmation buttons
             else if (buttonInteraction.customId.startsWith('ticket_close_')) {
