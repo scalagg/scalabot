@@ -3,6 +3,7 @@ import { Guild, GuildMember, TextChannel, User, ChannelType, PermissionFlagsBits
 import type { GuildBasedChannel } from 'discord.js';
 import { mongoService } from './MongoService';
 import { TicketModel, TicketCategory, type TicketMetadata, type Ticket } from '../models/Ticket';
+import { CounterModel } from '../models/Counter';
 import { serverUtils } from '../utils/ServerUtils';
 
 interface CreateTicketParams {
@@ -38,6 +39,24 @@ export class TicketService {
         if (!this.client) {
             throw new Error('Discord client not initialized. Call setClient() first.');
         }
+    }
+
+    private async getNextTicketNumber(guildId: string): Promise<number> {
+        this.checkInitialized();
+        
+        // Use MongoDB's findOneAndUpdate for atomic increment
+        const counter = await CounterModel.findOneAndUpdate(
+            { _id: `ticket_${guildId}` },
+            { $inc: { sequence: 1 } },
+            { 
+                new: true, 
+                upsert: true,
+                setDefaultsOnInsert: true
+            }
+        );
+
+        console.log(`[TicketService] Generated ticket number ${counter.sequence} for guild ${guildId}`);
+        return counter.sequence;
     }
 
     private async createTicketChannel(ticket: Partial<Ticket> & { ticketNumber: number; category: TicketCategory; metadata: TicketMetadata }): Promise<TextChannel> {
@@ -189,7 +208,7 @@ export class TicketService {
         return channel;
     }
 
-    async createTicket(params: CreateTicketParams) {
+    async createTicket(params: CreateTicketParams): Promise<Ticket> {
         console.log('[TicketService] Creating new ticket:', params);
 
         this.checkInitialized();
@@ -216,13 +235,12 @@ export class TicketService {
             }
         });
 
-        // Get next ticket number
-        const lastTicket = await TicketModel.findOne({ guildId }).sort({ ticketNumber: -1 });
-        const ticketNumber = (lastTicket?.ticketNumber || 0) + 1;
+        // Get next ticket number atomically
+        const ticketNumber = await this.getNextTicketNumber(guildId);
 
         console.log('[TicketService] Creating ticket with number:', {
             ticketNumber,
-            lastTicketNumber: lastTicket?.ticketNumber
+            guildId
         });
 
         // Create temporary ticket object for channel creation
@@ -246,10 +264,23 @@ export class TicketService {
         });
 
         // Create the ticket with channel ID
-        const ticket = await TicketModel.create({
-            ...tempTicket,
-            channelId: channel.id
-        });
+        let ticket;
+        try {
+            ticket = await TicketModel.create({
+                ...tempTicket,
+                channelId: channel.id
+            });
+        } catch (error: any) {
+            // Handle duplicate key error (shouldn't happen with atomic counter, but just in case)
+            if (error.code === 11000 && error.keyPattern?.ticketNumber) {
+                console.error('[TicketService] Duplicate ticket number detected, retrying...');
+                // Delete the channel we just created
+                await channel.delete();
+                // Retry with a new ticket number
+                return this.createTicket(params);
+            }
+            throw error;
+        }
 
         console.log('[TicketService] Created ticket in database:', {
             ticketId: ticket._id?.toString(),
@@ -500,6 +531,22 @@ export class TicketService {
             member.id !== ticket.claimedBy && 
             !ticket.additionalUsers.includes(member.id)
         ).toJSON();
+    }
+
+    async resetTicketCounter(guildId: string, newValue: number = 0): Promise<void> {
+        this.checkInitialized();
+        await CounterModel.findOneAndUpdate(
+            { _id: `ticket_${guildId}` },
+            { $set: { sequence: newValue } },
+            { upsert: true }
+        );
+        console.log(`[TicketService] Reset ticket counter for guild ${guildId} to ${newValue}`);
+    }
+
+    async getCurrentTicketNumber(guildId: string): Promise<number> {
+        this.checkInitialized();
+        const counter = await CounterModel.findOne({ _id: `ticket_${guildId}` });
+        return counter?.sequence || 0;
     }
 }
 

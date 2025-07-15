@@ -14,6 +14,7 @@ import {
 import type { OverwriteResolvable, PermissionOverwriteOptions } from 'discord.js';
 import { ticketService } from '../services/TicketService';
 import { TicketCategory } from '../models/Ticket';
+import { CounterModel } from '../models/Counter';
 import { serverUtils } from '../utils/ServerUtils';
 
 export async function handleTicketButton(interaction: ButtonInteraction) {
@@ -267,7 +268,16 @@ function getStaffPermissions(interaction: ButtonInteraction): OverwriteResolvabl
 }
 
 async function getNextTicketNumber(guildId: string): Promise<number> {
-    // This is a simple implementation - you might want to use a database counter
-    const existingTickets = await ticketService.getOpenTicketCount(guildId);
-    return existingTickets + 1;
+    // Use MongoDB's findOneAndUpdate for atomic increment
+    const counter = await CounterModel.findOneAndUpdate(
+        { _id: `ticket_${guildId}` },
+        { $inc: { sequence: 1 } },
+        { 
+            new: true, 
+            upsert: true,
+            setDefaultsOnInsert: true
+        }
+    );
+
+    return counter.sequence;
 } 

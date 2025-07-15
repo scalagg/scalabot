@@ -64,4 +64,7 @@ const ticketSchema = new Schema<Ticket>({
     metadata: { type: Schema.Types.Mixed, required: true }
 });
 
+// Add compound unique index for guildId + ticketNumber to prevent duplicates
+ticketSchema.index({ guildId: 1, ticketNumber: 1 }, { unique: true });
+
 export const TicketModel = model<Ticket>('Ticket', ticketSchema); 
