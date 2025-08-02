@@ -3,6 +3,7 @@ import { checkActivePunishments } from '../utils/minecraftUtils';
 import { mongoService } from './MongoService';
 import { redisService } from './RedisService';
 import { config } from '../config/config';
+import { serverUtils } from '../utils/ServerUtils';
 import type { Document } from 'mongodb';
 
 interface BaseDiscordProfile {
@@ -557,7 +558,7 @@ class PunishmentService {
             }
 
             // Fetch punishment details from the API
-            const response = await fetch(`${config.apiBaseUrl}/punishment/${cleanId}`, {
+            const response = await fetch(serverUtils.getPunishmentEndpoint(cleanId), {
                 headers: {
                     'Authorization': config.apiKey
                 }

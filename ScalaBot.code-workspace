@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../Solara/scala-rest-api"
+		},
+		{
+			"path": "../../ScalaGG/Lemon"
+		},
+		{
+			"path": "../fyre-api"
+		}
+	],
+	"settings": {
+		"java.compile.nullAnalysis.mode": "automatic"
+	}
+}

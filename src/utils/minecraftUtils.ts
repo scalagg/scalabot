@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import { config } from '../config/config';
+import { serverUtils } from './ServerUtils';
 import dns from 'dns';
 import { promisify } from 'util';
 import { status } from 'minecraft-server-util';
@@ -164,9 +165,10 @@ export async function checkActivePunishments(uuid: string): Promise<{
 }> {
     try {
         console.log(`[MinecraftUtils] Checking punishments for UUID: ${uuid}`);
-        console.log(`[MinecraftUtils] API URL: ${config.apiBaseUrl}/punishment/profile/${uuid}`);
+        const apiUrl = serverUtils.getPunishmentProfileEndpoint(uuid);
+        console.log(`[MinecraftUtils] API URL: ${apiUrl}`);
         
-        const response = await fetch(`${config.apiBaseUrl}/punishment/profile/${uuid}`, {
+        const response = await fetch(apiUrl, {
             headers: {
                 'Authorization': config.apiKey
             }

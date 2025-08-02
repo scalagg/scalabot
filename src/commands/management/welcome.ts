@@ -97,8 +97,8 @@ async function testWelcome(interaction: ChatInputCommandInteraction) {
             await interaction.editReply({ content: `❌ Could not find Minecraft user "${mcUsername}" (PlayerDB lookup failed).` });
             return;
         }
-        // Fetch Scala network profile
-        const mcProfileRes = await fetch(`${config.apiBaseUrl}/profile/${uuid}`, {
+        // Fetch network profile
+        const mcProfileRes = await fetch(serverUtils.getProfileEndpoint(uuid), {
             headers: { Authorization: config.apiKey }
         });
         if (mcProfileRes.ok) {
@@ -110,7 +110,7 @@ async function testWelcome(interaction: ChatInputCommandInteraction) {
             return;
         }
         // Fetch grants and debug rank selection
-        const grantsRes = await fetch(`${config.apiBaseUrl}/grant/profile/${uuid}`, {
+        const grantsRes = await fetch(serverUtils.getGrantsEndpoint(uuid), {
             headers: { Authorization: config.apiKey }
         });
         const grants: any[] = grantsRes.ok ? (await grantsRes.json() as any[]) : [];
@@ -124,7 +124,7 @@ async function testWelcome(interaction: ChatInputCommandInteraction) {
         for (const grant of activeGrants) {
             const thisRankId = grant.rankId;
             if (!thisRankId) continue;
-            const rankEndpoint = `${config.apiBaseUrl}/rank/${thisRankId}`;
+            const rankEndpoint = serverUtils.getRankEndpoint(thisRankId);
             console.log('[WelcomeCommand][DEBUG] Fetching rank details from:', rankEndpoint);
             try {
                 const rankRes = await fetch(rankEndpoint, { headers: { Authorization: config.apiKey } });
@@ -167,7 +167,7 @@ async function testWelcome(interaction: ChatInputCommandInteraction) {
         // Fetch level from coreplayerprofile endpoint
         let level: number | undefined = undefined;
         try {
-            const coreProfileRes = await fetch(`${config.apiBaseUrl}/coreplayerprofile/${uuid}`, {
+            const coreProfileRes = await fetch(serverUtils.getCoreProfileEndpoint(uuid), {
                 headers: { Authorization: config.apiKey }
             });
             if (coreProfileRes.ok) {

@@ -73,10 +73,24 @@ export class WelcomeService {
     public async handleMemberJoin(member: GuildMember): Promise<void> {
         try {
             // Set server type
-            serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(member.guild.id));
+            const serverType = serverUtils.getServerTypeFromGuildId(member.guild.id);
+            serverUtils.setServerType(serverType);
 
-            // Get player data from database if available
-            const playerData = await this.getPlayerData(member.id);
+            let playerData: PlayerData | undefined;
+
+            if (serverType === ServerType.HOLYPVP) {
+                // For HolyPvP, just use Discord data - no Minecraft verification needed
+                playerData = {
+                    username: member.user.username,
+                    uuid: member.id, // Use Discord ID as UUID for HolyPvP
+                    rank: 'Member',
+                    rankColor: '#AAAAAA',
+                    level: 0
+                };
+            } else {
+                // For Scala, try to get player data from database if available
+                playerData = await this.getPlayerData(member.id);
+            }
 
             // Create welcome image
             const imageBuffer = await this.createWelcomeImage({
@@ -152,20 +166,20 @@ export class WelcomeService {
     private async getPlayerDataByUuid(uuid: string): Promise<PlayerData | undefined> {
         try {
             // Fetch profile
-            const profileRes = await fetch(`${config.apiBaseUrl}/profile/${uuid}`, {
+            const profileRes = await fetch(serverUtils.getProfileEndpoint(uuid), {
                 headers: { Authorization: config.apiKey }
             });
             if (!profileRes.ok) return undefined;
             const profile: any = await profileRes.json();
             // Fetch grants
-            const grantsRes = await fetch(`${config.apiBaseUrl}/grant/profile/${uuid}`, {
+            const grantsRes = await fetch(serverUtils.getGrantsEndpoint(uuid), {
                 headers: { Authorization: config.apiKey }
             });
             const grants: any[] = grantsRes.ok ? (await grantsRes.json() as any[]) : [];
             // Fetch level from coreplayerprofile endpoint
             let level: number | undefined = undefined;
             try {
-                const coreProfileRes = await fetch(`${config.apiBaseUrl}/coreplayerprofile/${uuid}`, {
+                const coreProfileRes = await fetch(serverUtils.getCoreProfileEndpoint(uuid), {
                     headers: { Authorization: config.apiKey }
                 });
                 if (coreProfileRes.ok) {
@@ -193,7 +207,7 @@ export class WelcomeService {
             for (const grant of activeGrants) {
                 const thisRankId = grant.rankId;
                 if (!thisRankId) continue;
-                const rankEndpoint = `${config.apiBaseUrl}/rank/${thisRankId}`;
+                const rankEndpoint = serverUtils.getRankEndpoint(thisRankId);
                 console.log('[WelcomeService][DEBUG] Fetching rank details from:', rankEndpoint);
                 try {
                     const rankRes = await fetch(rankEndpoint, { headers: { Authorization: config.apiKey } });
@@ -278,8 +292,15 @@ export class WelcomeService {
             // Load and draw frames
             await this.drawFrames(ctx, width, height);
 
-            // Use MC skin as avatar
-            let avatarUrl = playerData?.uuid ? `https://skins.mcstats.com/bust/${playerData.uuid}` : member.user.displayAvatarURL({ extension: 'png', size: 256 });
+            // Use Discord avatar for HolyPvP, MC skin for Scala
+            let avatarUrl: string;
+            if (serverType === ServerType.HOLYPVP) {
+                // For HolyPvP, always use Discord avatar
+                avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+            } else {
+                // For Scala, use MC skin if available, fallback to Discord avatar
+                avatarUrl = playerData?.uuid ? `https://skins.mcstats.com/bust/${playerData.uuid}` : member.user.displayAvatarURL({ extension: 'png', size: 256 });
+            }
             const avatar = await this.loadImage(avatarUrl);
 
             // Draw avatar with frame
@@ -351,6 +372,7 @@ export class WelcomeService {
         const startX = 30;
         const startY = 200;
         const lineHeight = 40;
+        
         // Draw welcome message with rank
         let rankDisplay = playerData?.rank && playerData.rank !== 'NONE' ? playerData.rank : undefined;
         // Remove brackets if present for join message
@@ -361,28 +383,36 @@ export class WelcomeService {
         const username = playerData?.username || member.user.username;
         const rankText = rankDisplay ? `${rankDisplay} ${username}` : username;
         await this.drawRankString(ctx, rankText, rankColor, startX, 80);
+        
         ctx.font = '25px Roboto';
         ctx.textAlign = 'left';
         this.drawInfoLine(ctx, 'Discord:', member.user.tag, startX, startY, '#5555FF', '#FFFFFF');
-        // Rank info (show rank name, not prefix)
-        this.drawInfoLine(ctx, 'Rank:', rankDisplay || 'Default', startX, startY + lineHeight, rankColor, '#FFFFFF');
-        // Level info (placeholder)
-        this.drawInfoLine(ctx, 'Level:', playerData?.level !== undefined ? playerData.level.toString() : 'N/A', startX, startY + lineHeight * 2, '#FFAA00', '#FFFFFF');
-        // First join
-        ctx.globalAlpha = 0.7;
-        ctx.font = '17px Roboto';
-        ctx.fillStyle = '#55FF55';
-        ctx.fillText('First joined on', startX, 360);
-        ctx.font = '15px Roboto';
-        ctx.fillStyle = '#FFFFFF';
-        let firstJoinText = 'Unknown';
-        if (playerData && (playerData as any).firstJoin instanceof Date) {
-            const d = (playerData as any).firstJoin;
-            firstJoinText = `${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+        
+        if (serverType === ServerType.HOLYPVP) {
+            // For HolyPvP, show simplified info - just Discord data
+            this.drawInfoLine(ctx, 'Status:', 'Member', startX, startY + lineHeight, '#55FF55', '#FFFFFF');
+            this.drawInfoLine(ctx, 'Type:', 'Discord User', startX, startY + lineHeight * 2, '#FFAA00', '#FFFFFF');
+        } else {
+            // For Scala, show Minecraft rank and level info
+            this.drawInfoLine(ctx, 'Rank:', rankDisplay || 'Default', startX, startY + lineHeight, rankColor, '#FFFFFF');
+            this.drawInfoLine(ctx, 'Level:', playerData?.level !== undefined ? playerData.level.toString() : 'N/A', startX, startY + lineHeight * 2, '#FFAA00', '#FFFFFF');
         }
-        ctx.fillText(firstJoinText, startX, 380);
-        ctx.globalAlpha = 1;
-        // Discord account creation
+        
+        // First join (only show for Scala with Minecraft data)
+        if (serverType !== ServerType.HOLYPVP && playerData && (playerData as any).firstJoin instanceof Date) {
+            ctx.globalAlpha = 0.7;
+            ctx.font = '17px Roboto';
+            ctx.fillStyle = '#55FF55';
+            ctx.fillText('First joined on', startX, 360);
+            ctx.font = '15px Roboto';
+            ctx.fillStyle = '#FFFFFF';
+            const d = (playerData as any).firstJoin;
+            const firstJoinText = `${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+            ctx.fillText(firstJoinText, startX, 380);
+            ctx.globalAlpha = 1;
+        }
+        
+        // Discord account creation (show for both servers)
         ctx.font = '17px Roboto';
         ctx.fillStyle = '#5555FF';
         ctx.fillText('Discord account created on', startX, 400);
@@ -392,6 +422,7 @@ export class WelcomeService {
         const yearsAgo = Math.floor((Date.now() - member.user.createdAt.getTime()) / (1000 * 60 * 60 * 24 * 365));
         ctx.fillText(`${createdDate} (${yearsAgo} years ago)`, startX, 420);
         ctx.globalAlpha = 1;
+        
         // Move member count to bottom left, styled nicely
         ctx.font = '18px Roboto';
         ctx.fillStyle = '#BBBBBB';

@@ -271,7 +271,7 @@ async function showInGameHistory(interaction: any, userId: string) {
         }
 
         // Fetch all punishments from the API
-        const response = await fetch(`${config.apiBaseUrl}/punishment/profile/${profile.identifier}`, {
+        const response = await fetch(serverUtils.getPunishmentProfileEndpoint(profile.identifier), {
             headers: {
                 'Authorization': config.apiKey
             }
@@ -517,7 +517,7 @@ export async function handleHistoryButton(interaction: any) {
         }
 
         // Fetch all punishments
-        const response = await fetch(`${config.apiBaseUrl}/punishment/profile/${profile.identifier}`, {
+        const response = await fetch(serverUtils.getPunishmentProfileEndpoint(profile.identifier), {
             headers: {
                 'Authorization': config.apiKey
             }

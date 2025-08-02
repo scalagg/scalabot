@@ -25,6 +25,19 @@ interface ServerInfo {
     logo?: string;
 }
 
+interface ApiConfig {
+    baseUrl: string;
+    endpoints: {
+        profile: string;
+        grants: string;
+        rank: string;
+        coreProfile: string;
+        punishment: string;
+        punishmentProfile: string;
+        connections: string;
+    };
+}
+
 interface StaffRoles {
     staff: string[];      // All staff roles that can see tickets
     admin: string[];      // Admin roles with elevated permissions
@@ -34,6 +47,7 @@ interface StaffRoles {
 interface ServerConfig {
     theme: ServerTheme;
     info: ServerInfo;
+    api: ApiConfig;
     roles: StaffRoles;
 }
 
@@ -53,6 +67,18 @@ const SCALA_CONFIG: ServerConfig = {
         store: 'store.scala.gg',
         discord: 'discord.gg/potpvp',
         logo: 'https://i.imgur.com/JGiC6hP.png'
+    },
+    api: {
+        baseUrl: 'https://api.scala.gg',
+        endpoints: {
+            profile: '/profile/{uuid}',
+            grants: '/grant/profile/{uuid}',
+            rank: '/rank/{rankId}',
+            coreProfile: '/coreplayerprofile/{uuid}',
+            punishment: '/punishment/{punishmentId}',
+            punishmentProfile: '/punishment/profile/{uuid}',
+            connections: '/profile/connections/{uuid}'
+        }
     },
     roles: {
         staff: [
@@ -105,6 +131,18 @@ const HOLYPVP_CONFIG: ServerConfig = {
         store: 'store.holypvp.net',
         discord: 'discord.holypvp.net',
         logo: 'holypvp_logo.png'
+    },
+    api: {
+        baseUrl: 'https://api.fyre.cc',
+        endpoints: {
+            profile: '/api/v2/profiles/{uuid}',
+            grants: '/api/v2/profiles/{uuid}/grants',
+            rank: '/api/v1/ranks/{rankId}',
+            coreProfile: '/api/v2/profiles/{uuid}',
+            punishment: '/api/v2/profiles/{uuid}/punishment',
+            punishmentProfile: '/api/v2/profiles/{uuid}/punishment',
+            connections: '/api/v2/profiles/{uuid}/connections'
+        }
     },
     roles: {
         staff: [
@@ -160,8 +198,53 @@ export class ServerUtils {
         return this.getConfig().info;
     }
 
+    public getApi(): ApiConfig {
+        return this.getConfig().api;
+    }
+
     public getRoles(): StaffRoles {
         return this.getConfig().roles;
+    }
+
+    // API endpoint utility methods
+    public getApiEndpoint(endpoint: keyof ApiConfig['endpoints'], params: Record<string, string> = {}): string {
+        const api = this.getApi();
+        let url = api.baseUrl + api.endpoints[endpoint];
+        
+        // Replace parameters in the URL
+        Object.entries(params).forEach(([key, value]) => {
+            url = url.replace(`{${key}}`, value);
+        });
+        
+        return url;
+    }
+
+    public getProfileEndpoint(uuid: string): string {
+        return this.getApiEndpoint('profile', { uuid });
+    }
+
+    public getGrantsEndpoint(uuid: string): string {
+        return this.getApiEndpoint('grants', { uuid });
+    }
+
+    public getRankEndpoint(rankId: string): string {
+        return this.getApiEndpoint('rank', { rankId });
+    }
+
+    public getCoreProfileEndpoint(uuid: string): string {
+        return this.getApiEndpoint('coreProfile', { uuid });
+    }
+
+    public getPunishmentEndpoint(punishmentId: string): string {
+        return this.getApiEndpoint('punishment', { punishmentId });
+    }
+
+    public getPunishmentProfileEndpoint(uuid: string): string {
+        return this.getApiEndpoint('punishmentProfile', { uuid });
+    }
+
+    public getConnectionsEndpoint(uuid: string): string {
+        return this.getApiEndpoint('connections', { uuid });
     }
 
     // Utility methods for common operations

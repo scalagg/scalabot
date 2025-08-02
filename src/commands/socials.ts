@@ -59,7 +59,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         };
         
         // Now fetch the player's socials using their UUID
-        const socialsUrl = `${config.apiBaseUrl}/profile/connections/${player.uuid}`;
+        const socialsUrl = serverUtils.getConnectionsEndpoint(player.uuid);
         console.log('[Socials Command] Fetching socials from:', socialsUrl);
         console.log('[Socials Command] Using API key:', config.apiKey ? 'Present' : 'Missing');
         
