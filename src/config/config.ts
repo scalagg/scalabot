@@ -13,7 +13,7 @@ interface BotConfig {
   mongoDbName: string;
   redisHost: string;
   redisPort: number;
-  redisPassword: string;
+  redisPassword?: string;
   testGuildId?: string;
   gemini?: {
     apiKey: string;
@@ -88,7 +88,7 @@ class Config {
   private validateConfig() {
     const requiredFields: (keyof BotConfig)[] = [
       'token', 'welcomeChannelId', 'ticketLogsChannelId', 'punishmentLogsChannelId', 'apiBaseUrl', 'apiKey',
-      'mongoUri', 'mongoDbName', 'redisHost', 'redisPort', 'redisPassword', 'welcomeMessage'
+      'mongoUri', 'mongoDbName', 'redisHost', 'redisPort', 'welcomeMessage'
     ];
 
     for (const field of requiredFields) {
@@ -145,7 +145,7 @@ class Config {
     return this.config.redisPort;
   }
 
-  public get redisPassword(): string {
+  public get redisPassword(): string | undefined {
     return this.config.redisPassword;
   }
 
