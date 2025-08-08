@@ -76,31 +76,24 @@ export class WelcomeService {
             const serverType = serverUtils.getServerTypeFromGuildId(member.guild.id);
             serverUtils.setServerType(serverType);
 
-            let playerData: PlayerData | undefined;
-
             if (serverType === ServerType.HOLYPVP) {
-                // For HolyPvP, just use Discord data - no Minecraft verification needed
-                playerData = {
-                    username: member.user.username,
-                    uuid: member.id, // Use Discord ID as UUID for HolyPvP
-                    rank: 'Member',
-                    rankColor: '#AAAAAA',
-                    level: 0
-                };
+                // For HolyPvP, send simple text message
+                await this.sendSimpleWelcomeMessage(member);
             } else {
-                // For Scala, try to get player data from database if available
+                // For Scala, use the full welcome image system
+                let playerData: PlayerData | undefined;
                 playerData = await this.getPlayerData(member.id);
+
+                // Create welcome image
+                const imageBuffer = await this.createWelcomeImage({
+                    member,
+                    playerData,
+                    memberCount: member.guild.memberCount
+                });
+
+                // Send welcome message
+                await this.sendWelcomeMessage(member, imageBuffer, playerData);
             }
-
-            // Create welcome image
-            const imageBuffer = await this.createWelcomeImage({
-                member,
-                playerData,
-                memberCount: member.guild.memberCount
-            });
-
-            // Send welcome message
-            await this.sendWelcomeMessage(member, imageBuffer, playerData);
 
         } catch (error) {
             console.error('[WelcomeService] Error handling member join:', error);
@@ -494,6 +487,24 @@ export class WelcomeService {
         ctx.fillText(`Member #${memberCount}`, width / 2, height / 2 + 50);
 
         return canvas.toBuffer('image/png');
+    }
+
+    private async sendSimpleWelcomeMessage(member: GuildMember): Promise<void> {
+        try {
+            const welcomeChannel = await this.client.channels.fetch(config.welcomeChannelId) as TextChannel;
+            if (!welcomeChannel) {
+                console.warn('[WelcomeService] Welcome channel not found');
+                return;
+            }
+
+            // Send simple text message for HolyPvP
+            await welcomeChannel.send({
+                content: `Welcome to the **HolyPvP Network** Discord, ${member}!`
+            });
+
+        } catch (error) {
+            console.error('[WelcomeService] Error sending simple welcome message:', error);
+        }
     }
 
     private async sendWelcomeMessage(member: GuildMember, imageBuffer: Buffer, playerData?: PlayerData): Promise<void> {
