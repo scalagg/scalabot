@@ -39,6 +39,7 @@ interface ApiConfig {
 }
 
 interface StaffRoles {
+    trainee: string[];    // Trainee roles with basic permissions
     staff: string[];      // All staff roles that can see tickets
     admin: string[];      // Admin roles with elevated permissions
     manager: string[];    // Manager roles with highest permissions
@@ -81,6 +82,9 @@ const SCALA_CONFIG: ServerConfig = {
         }
     },
     roles: {
+        trainee: [
+            'Trainee'
+        ],
         staff: [
             'Permissions',
             'Robot Permissions',
@@ -130,10 +134,10 @@ const HOLYPVP_CONFIG: ServerConfig = {
         ip: 'play.holypvp.net',
         store: 'store.holypvp.net',
         discord: 'discord.holypvp.net',
-        logo: 'holypvp_logo.png'
+        logo: 'https://i.imgur.com/D3npY4S.png'
     },
     api: {
-        baseUrl: 'https://api.fyre.cc',
+        baseUrl: 'https://api-holy.scala.gg',
         endpoints: {
             profile: '/api/v2/profiles/{uuid}',
             grants: '/api/v2/profiles/{uuid}/grants',
@@ -145,24 +149,41 @@ const HOLYPVP_CONFIG: ServerConfig = {
         }
     },
     roles: {
-        staff: [
-            'Helper',
+        trainee: [
+            'Trial Mod',
+            'Trainee',
             'Mod',
+            'Mod+',
             'Senior Mod',
             'Admin',
             'Senior Admin',
-            'Head Admin',
+            'Platform Admin',
+            'Developer',
+            'Manager',
+            'Owner'
+
+        ],
+        staff: [
+            'Mod',
+            'Mod+',
+            'Senior Mod',
+            'Admin',
+            'Senior Admin',
+            'Platform Admin',
+            'Developer',
             'Manager',
             'Owner'
         ],
         admin: [
             'Admin',
             'Senior Admin',
-            'Head Admin',
+            'Platform Admin',
             'Manager',
+            'Developer',
             'Owner'
         ],
         manager: [
+            'Developer',
             'Manager',
             'Owner'
         ]
@@ -267,10 +288,9 @@ export class ServerUtils {
     }
 
     public getServerTypeFromGuildId(guildId: string): ServerType {
-        // You can add guild IDs here to map them to server types
         const GUILD_MAP: Record<string, ServerType> = {
-            '999774017223409714': ServerType.SCALA,      // Replace with actual Scala guild ID
-            '536628675593109514': ServerType.HOLYPVP     // Replace with actual HolyPvP guild ID
+            '999774017223409714': ServerType.SCALA,      
+            '536628675593109514': ServerType.HOLYPVP     
         };
         return GUILD_MAP[guildId] || ServerType.SCALA; // Default to Scala if not found
     }
@@ -326,7 +346,7 @@ export class ServerUtils {
             'Admin',
             'Senior Mod',
             'Mod',
-            'Helper'
+            'Trial Mod'
         ];
     }
 

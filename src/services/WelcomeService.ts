@@ -77,7 +77,6 @@ export class WelcomeService {
             serverUtils.setServerType(serverType);
 
             if (serverType === ServerType.HOLYPVP) {
-                // For HolyPvP, send simple text message
                 await this.sendSimpleWelcomeMessage(member);
             } else {
                 // For Scala, use the full welcome image system
@@ -102,14 +101,22 @@ export class WelcomeService {
 
     public async handleVerificationWelcome(member: GuildMember, minecraftUsername: string, uuid: string): Promise<void> {
         try {
-            serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(member.guild.id));
-            const playerData = await this.getPlayerDataByUuid(uuid);
-            const imageBuffer = await this.createWelcomeImage({
-                member,
-                playerData,
-                memberCount: member.guild.memberCount
-            });
-            await this.sendWelcomeMessage(member, imageBuffer, playerData);
+            const serverType = serverUtils.getServerTypeFromGuildId(member.guild.id);
+            serverUtils.setServerType(serverType);
+
+            if (serverType === ServerType.HOLYPVP) {
+                // For HolyPvP, send simple text message
+                await this.sendSimpleWelcomeMessage(member);
+            } else {
+                // For Scala, use the full welcome image system
+                const playerData = await this.getPlayerDataByUuid(uuid);
+                const imageBuffer = await this.createWelcomeImage({
+                    member,
+                    playerData,
+                    memberCount: member.guild.memberCount
+                });
+                await this.sendWelcomeMessage(member, imageBuffer, playerData);
+            }
         } catch (error) {
             console.error('[WelcomeService] Error handling verification welcome:', error);
         }

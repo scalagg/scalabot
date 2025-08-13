@@ -123,28 +123,28 @@ export class TranscriptService {
             const embed = new EmbedBuilder()
                 .setColor('#2f3136')
                 .setTitle('Ticket logs - Ticket automatically closed')
-                .addFields([
-                    { 
-                        name: 'Guild',
-                        value: `${channel.guild.name} (ID: ${channel.guild.id})`,
-                        inline: false 
-                    },
-                    { 
-                        name: 'Channel',
-                        value: `#${channel.name} (ID: ${channel.id})`,
-                        inline: false 
-                    },
-                    { 
-                        name: 'Category',
-                        value: `${ticket.category} Support`,
-                        inline: false 
-                    },
-                    { 
-                        name: 'Author',
-                        value: `<@${ticket.userId}> (ID: ${ticket.userId})`,
-                        inline: false 
-                    }
-                ]);
+                            .addFields([
+                { 
+                    name: 'Guild',
+                    value: `${channel.guild.name} (ID: ${channel.guild.id})`,
+                    inline: false 
+                },
+                { 
+                    name: 'Channel',
+                    value: `#${channel.name} (ID: ${channel.id})`,
+                    inline: false 
+                },
+                { 
+                    name: 'Category',
+                    value: `${ticket.category}`,
+                    inline: false 
+                },
+                { 
+                    name: 'Author',
+                    value: `<@${ticket.userId}> (ID: ${ticket.userId})`,
+                    inline: false 
+                }
+            ]);
 
             if (reason) {
                 embed.addFields({ 

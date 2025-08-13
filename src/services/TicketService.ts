@@ -71,24 +71,66 @@ export class TicketService {
         // Set server type based on guild ID
         serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(guild.id));
 
-        // Create under "Tickets" category
+        // Import category helper functions
+        const { 
+            getCategoryChannelPrefix, 
+            getCategoryDisplayName, 
+            getCategoryColor, 
+            getCategoryDiscordCategory,
+            getCategoryRequiredRoles,
+            getCategorySpecificRoleId
+        } = await import('../models/Ticket');
+
+        // Find the appropriate Discord category for this ticket type
+        const discordCategoryName = getCategoryDiscordCategory(ticket.category);
         const categoryChannel = guild.channels.cache.find(
             (c: GuildBasedChannel) => c.type === ChannelType.GuildCategory && 
-                c.name.toLowerCase() === 'tickets'
+                c.name.toLowerCase() === discordCategoryName.toLowerCase()
         );
 
         if (!categoryChannel) {
-            throw new Error('Category channel "Tickets" not found. Please create this category in Discord.');
+            throw new Error(`Category channel "${discordCategoryName}" not found. Please create this category in Discord.`);
         }
 
-        // Get staff roles
-        const staffRoles = serverUtils.getRoles().staff;
-        const staffRoleIds = await Promise.all(
-            staffRoles.map(async (roleName) => {
-                const role = guild.roles.cache.find(r => r.name === roleName);
-                return role?.id;
-            })
-        ).then(ids => ids.filter((id): id is string => id !== undefined));
+        // Get required roles for this ticket category
+        const requiredRoleTypes = getCategoryRequiredRoles(ticket.category);
+        const staffRoleIds: string[] = [];
+        
+        // Add roles based on required role types
+        for (const roleType of requiredRoleTypes) {
+            if (roleType === 'tebex') {
+                // Add specific Tebex role ID
+                const tebexRoleId = getCategorySpecificRoleId(ticket.category);
+                if (tebexRoleId) {
+                    staffRoleIds.push(tebexRoleId);
+                }
+            } else {
+                // Get roles from serverUtils based on type
+                let roleNames: string[] = [];
+                switch (roleType) {
+                    case 'manager':
+                        roleNames = serverUtils.getRoles().manager;
+                        break;
+                    case 'admin':
+                        roleNames = serverUtils.getRoles().admin;
+                        break;
+                    case 'staff':
+                        roleNames = serverUtils.getRoles().staff;
+                        break;
+                    case 'trainee':
+                        roleNames = serverUtils.getRoles().trainee;
+                        break;
+                }
+                
+                // Find role IDs
+                for (const roleName of roleNames) {
+                    const role = guild.roles.cache.find(r => r.name === roleName);
+                    if (role) {
+                        staffRoleIds.push(role.id);
+                    }
+                }
+            }
+        }
 
         // Create permission overwrites for all staff roles
         const permissionOverwrites = [
@@ -110,9 +152,12 @@ export class TicketService {
             }))
         ];
 
-        // Create the channel
+        // Create the channel with category-based naming
+        const categoryPrefix = getCategoryChannelPrefix(ticket.category);
+        const channelName = `${categoryPrefix}-${ticket.ticketNumber}`;
+        
         const channel = await guild.channels.create({
-            name: `ticket-${ticket.ticketNumber}`,
+            name: channelName,
             type: ChannelType.GuildText,
             parent: categoryChannel.id,
             permissionOverwrites
@@ -120,24 +165,29 @@ export class TicketService {
 
         // Create ticket information embed
         const embed = new EmbedBuilder()
-            .setColor(serverUtils.getColor('primary'))
-            .setTitle('SUPPORT TICKET')
+            .setColor(getCategoryColor(ticket.category) as any)
+            .setTitle(`${getCategoryDisplayName(ticket.category)} - Ticket #${ticket.ticketNumber}`)
             .setDescription(
-                `Welcome <@${ticket.userId}> to our staff support ticket.\n` +
+                `Welcome <@${ticket.userId}> to our ${getCategoryDisplayName(ticket.category).toLowerCase()}.\n` +
                 'Our staff will assist you as soon as possible. It may be possible that they are busy\n' +
                 'attending someone else, but for the moment we ask for your patience.\n' +
                 'If you don\'t receive a reply within **5 hours**, you can tag a staff member.'
             )
             .addFields(
                 { 
-                    name: '📝 Ticket type',
-                    value: `${ticket.category} Support`,
-                    inline: false 
+                    name: '📝 Ticket Category',
+                    value: getCategoryDisplayName(ticket.category),
+                    inline: true 
                 },
                 { 
-                    name: '⏰ This ticket was made',
+                    name: '🎫 Ticket Number',
+                    value: `#${ticket.ticketNumber}`,
+                    inline: true 
+                },
+                { 
+                    name: '⏰ Created',
                     value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
-                    inline: false 
+                    inline: true 
                 }
             );
 
@@ -147,14 +197,107 @@ export class TicketService {
                 { 
                     name: '👤 IGN',
                     value: ticket.metadata.minecraft.username,
-                    inline: false 
+                    inline: true 
                 },
                 { 
                     name: '🎮 Game Mode',
                     value: ticket.metadata.minecraft.gameMode || 'Not specified',
-                    inline: false 
+                    inline: true 
                 }
             );
+        }
+
+        // Add category-specific information
+        switch (ticket.category) {
+            case 'STAFF_APPLICATION':
+                if (ticket.metadata.applicationType) {
+                    embed.addFields({
+                        name: '📝 Application Type',
+                        value: ticket.metadata.applicationType,
+                        inline: true
+                    });
+                }
+                if (ticket.metadata.experience) {
+                    embed.addFields({
+                        name: '💼 Experience',
+                        value: ticket.metadata.experience,
+                        inline: false
+                    });
+                }
+                if (ticket.metadata.age) {
+                    embed.addFields({
+                        name: '🎂 Age',
+                        value: ticket.metadata.age,
+                        inline: true
+                    });
+                }
+                if (ticket.metadata.timezone) {
+                    embed.addFields({
+                        name: '🌍 Timezone',
+                        value: ticket.metadata.timezone,
+                        inline: true
+                    });
+                }
+                if (ticket.metadata.availability) {
+                    embed.addFields({
+                        name: '⏰ Availability',
+                        value: ticket.metadata.availability,
+                        inline: false
+                    });
+                }
+                break;
+            case 'MEDIA_APPLICATION':
+                if (ticket.metadata.mediaType) {
+                    embed.addFields({
+                        name: '📸 Media Type',
+                        value: ticket.metadata.mediaType,
+                        inline: true
+                    });
+                }
+                if (ticket.metadata.experience) {
+                    embed.addFields({
+                        name: '💼 Experience',
+                        value: ticket.metadata.experience,
+                        inline: false
+                    });
+                }
+                break;
+            case 'PUNISHMENT_APPEAL':
+                if (ticket.metadata.appealReason) {
+                    embed.addFields({
+                        name: '📝 Appeal Reason',
+                        value: ticket.metadata.appealReason,
+                        inline: false
+                    });
+                }
+                break;
+            case 'BUG_REPORT':
+                if (ticket.metadata.bugDescription) {
+                    embed.addFields({
+                        name: '🐛 Bug Description',
+                        value: ticket.metadata.bugDescription,
+                        inline: false
+                    });
+                }
+                break;
+            case 'TEBEX_SUPPORT':
+                if (ticket.metadata.tebexOrderId) {
+                    embed.addFields({
+                        name: '🛒 Order ID',
+                        value: ticket.metadata.tebexOrderId,
+                        inline: true
+                    });
+                }
+                break;
+            case 'HEAD_STAFF_SUPPORT':
+                // Head staff support specific fields can be added here
+                break;
+            case 'GENERAL_SUPPORT':
+                // General support specific fields can be added here
+                break;
+            case 'OTHER':
+                // Other specific fields can be added here
+                break;
         }
 
         // Add issue if provided
@@ -228,9 +371,38 @@ export class TicketService {
             metadata.issue = fields['issue'];
         }
 
+        // Add category-specific fields to metadata
+        if (fields['application-type']) {
+            metadata.applicationType = fields['application-type'];
+        }
+        if (fields['appeal-reason']) {
+            metadata.appealReason = fields['appeal-reason'];
+        }
+        if (fields['bug-description']) {
+            metadata.bugDescription = fields['bug-description'];
+        }
+        if (fields['tebex-order-id']) {
+            metadata.tebexOrderId = fields['tebex-order-id'];
+        }
+        if (fields['media-type']) {
+            metadata.mediaType = fields['media-type'];
+        }
+        if (fields['experience']) {
+            metadata.experience = fields['experience'];
+        }
+        if (fields['age']) {
+            metadata.age = fields['age'];
+        }
+        if (fields['timezone']) {
+            metadata.timezone = fields['timezone'];
+        }
+        if (fields['availability']) {
+            metadata.availability = fields['availability'];
+        }
+
         // Add any additional fields to metadata
         Object.entries(fields).forEach(([key, value]) => {
-            if (!['minecraft-username', 'game-mode', 'issue'].includes(key)) {
+            if (!['minecraft-username', 'game-mode', 'issue', 'application-type', 'appeal-reason', 'bug-description', 'tebex-order-id', 'media-type', 'experience', 'age', 'timezone', 'availability'].includes(key)) {
                 metadata[key] = value;
             }
         });
@@ -352,22 +524,67 @@ export class TicketService {
         // Set server type based on guild ID
         serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(guild.id));
 
-        // Get staff roles
-        const staffRoles = serverUtils.getRoles().staff;
-        const adminRoles = serverUtils.getRoles().admin;
+        // Import category helper functions
+        const { getCategoryRequiredRoles, getCategorySpecificRoleId } = await import('../models/Ticket');
 
-        // Update permissions for all staff roles
-        for (const roleName of staffRoles) {
-            const role = guild.roles.cache.find(r => r.name === roleName);
+        // Get required roles for this ticket category
+        const requiredRoleTypes = getCategoryRequiredRoles(ticket.category);
+        const allRequiredRoles: string[] = [];
+        
+        // Add roles based on required role types
+        for (const roleType of requiredRoleTypes) {
+            if (roleType === 'tebex') {
+                // Add specific Tebex role ID
+                const tebexRoleId = getCategorySpecificRoleId(ticket.category);
+                if (tebexRoleId) {
+                    allRequiredRoles.push(tebexRoleId);
+                }
+            } else {
+                // Get roles from serverUtils based on type
+                let roleNames: string[] = [];
+                switch (roleType) {
+                    case 'manager':
+                        roleNames = serverUtils.getRoles().manager;
+                        break;
+                    case 'admin':
+                        roleNames = serverUtils.getRoles().admin;
+                        break;
+                    case 'staff':
+                        roleNames = serverUtils.getRoles().staff;
+                        break;
+                    case 'trainee':
+                        roleNames = serverUtils.getRoles().trainee;
+                        break;
+                }
+                
+                // Find role IDs
+                for (const roleName of roleNames) {
+                    const role = guild.roles.cache.find(r => r.name === roleName);
+                    if (role) {
+                        allRequiredRoles.push(role.id);
+                    }
+                }
+            }
+        }
+
+        // Update permissions for all required roles
+        for (const roleId of allRequiredRoles) {
+            const role = guild.roles.cache.get(roleId);
             if (role) {
-                // If it's an admin role or higher, keep write permissions
-                if (adminRoles.includes(roleName)) {
+                // Check if this role is an admin role (can always write)
+                const adminRoles = serverUtils.getRoles().admin;
+                const isAdminRole = adminRoles.some(adminRoleName => {
+                    const adminRole = guild.roles.cache.find(r => r.name === adminRoleName);
+                    return adminRole && adminRole.id === roleId;
+                });
+                
+                if (isAdminRole) {
                     await channel.permissionOverwrites.edit(role, {
                         ViewChannel: true,
                         SendMessages: true
                     });
                 } else {
-                    // For other staff roles, remove write permissions
+                    // For other roles, remove write permissions
                     await channel.permissionOverwrites.edit(role, {
                         ViewChannel: true,
                         SendMessages: false
@@ -414,12 +631,52 @@ export class TicketService {
         // Set server type based on guild ID
         serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(guild.id));
 
-        // Get staff roles
-        const staffRoles = serverUtils.getRoles().staff;
+        // Import category helper functions
+        const { getCategoryRequiredRoles, getCategorySpecificRoleId } = await import('../models/Ticket');
 
-        // Restore write permissions for all staff roles
-        for (const roleName of staffRoles) {
-            const role = guild.roles.cache.find(r => r.name === roleName);
+        // Get required roles for this ticket category
+        const requiredRoleTypes = getCategoryRequiredRoles(ticket.category);
+        const allRequiredRoles: string[] = [];
+        
+        // Add roles based on required role types
+        for (const roleType of requiredRoleTypes) {
+            if (roleType === 'tebex') {
+                // Add specific Tebex role ID
+                const tebexRoleId = getCategorySpecificRoleId(ticket.category);
+                if (tebexRoleId) {
+                    allRequiredRoles.push(tebexRoleId);
+                }
+            } else {
+                // Get roles from serverUtils based on type
+                let roleNames: string[] = [];
+                switch (roleType) {
+                    case 'manager':
+                        roleNames = serverUtils.getRoles().manager;
+                        break;
+                    case 'admin':
+                        roleNames = serverUtils.getRoles().admin;
+                        break;
+                    case 'staff':
+                        roleNames = serverUtils.getRoles().staff;
+                        break;
+                    case 'trainee':
+                        roleNames = serverUtils.getRoles().trainee;
+                        break;
+                }
+                
+                // Find role IDs
+                for (const roleName of roleNames) {
+                    const role = guild.roles.cache.find(r => r.name === roleName);
+                    if (role) {
+                        allRequiredRoles.push(role.id);
+                    }
+                }
+            }
+        }
+
+        // Restore write permissions for all required roles
+        for (const roleId of allRequiredRoles) {
+            const role = guild.roles.cache.get(roleId);
             if (role) {
                 await channel.permissionOverwrites.edit(role, {
                     ViewChannel: true,

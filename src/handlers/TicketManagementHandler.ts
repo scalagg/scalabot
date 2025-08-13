@@ -337,8 +337,7 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
 
                     await interaction.reply({
                         embeds: [ratingEmbed],
-                        components: [ratingRow],
-                        flags: 1 << 6
+                        components: [ratingRow]
                     });
                 }
                 break;

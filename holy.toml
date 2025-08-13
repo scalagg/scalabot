@@ -1,0 +1,113 @@
+# Discord Bot Configuration
+token = "MTM2NDgyMTU1MzkwNDA5MTE0Nw.G_NVMl.Nn5hdvK3sDHoSQCmfR7XNJhoDTaL3389sF028I"
+welcomeChannelId = "1137170962320732261"
+testGuildId = "1364827476764786768"
+ticketLogsChannelId = "1390211512362074193" 
+welcomeMessage = "Welcome to HolyPvP's Official Discord Server! ðŸŽ®"
+punishmentLogsChannelId = "1390202018240659617"
+# Backend API Configuration
+apiBaseUrl = "http://127.0.0.1:8000"
+apiKey = "14ebcb9e-5c92-4980-b4b7-268847666675"
+
+# MongoDB Configuration
+mongoUri = "mongodb://127.0.0.1:27017/?authSource=admin"
+mongoDbName = "HolyPvP-Discord"
+
+# Redis Configuration
+redisHost = "127.0.0.1"
+redisPort = 6379
+redisPassword = ""
+
+deeplApiKey = "3482c6e7-e817-454c-a347-dfa2c0ee0b81:fx" 
+# Welcome Image Configuration
+[welcomeImage]
+backgroundPath = "assets/images/welcome-bg.png"
+guildName = "HolyPvP's Official Discord Server"
+level = 0  # Default level for new members
+
+# Text Colors (optional, will use defaults if not specified)
+usernameColor = "#00ffff"  # Cyan for username in join message
+memberCountColor = "#ffffff"  # White for member count
+
+[welcomeImage.fontSize]
+welcome = 60
+username = 40
+memberCount = 30
+
+[gemini]
+apiKey = "AIzaSyDk2DcJFz56EOmaWn451XZfgQwoE4jUgcc,AIzaSyCzGPuolbhWOMyJiL1U15sbxMEQ-ZdHrWY,AIzaSyA6KnH87GiAjmn2-aKfkSejIXyIi5T0hmc"
+# apiKey = "AIzaSyDk2DcJFz56EOmaWn451XZfgQwoE4jUgcc,AIzaSyA-qwGOJV4oXwspN1H2f0MKrwdJzFxb8TY,AIzaSyCROFYyDE0PPm8S24QKl2-9YIpAq8C8dPE,AIzaSyBCCLEMBdexVAPRNTXEXedl8dXZ1dXfo1g,AIzaSyDeXIHUcyDMwoNbQKQkM6USzZdusFZ15QM"  # Multiple keys separated by commas
+apiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=%s"
+generativeAIPrompt = "Analyze the text \"%s\" and rate its toxicity on a scale of 0 to 100, where 0 represents no toxicity and 100 represents extremely toxic content. Consider harmful language, such as racism, bad words, and harmful phrases, as toxic. However, be cautious with context. For example, if the text contains a question like \"Is the n-word bannable?\" it should receive a lower toxicity rating because the user is asking a question and not using the word itself. Additionally, if a text includes a single letter like \"n\", do not automatically assume it refers to a harmful word like \"the n-word\". Consider the possibility of mistyping; while it should add to the toxicity rating, it should not result in a high toxicity score by default.  Prioritize the severity of the language: hate speech, threats, and harassment should have the highest scores (e.g., 80-100), while general profanity (e.g., 'fuck') should have a much lower impact (e.g., 10-30) unless used in an aggressive or targeted manner. Words like 'n-word' (when referring to the term itself) should not be rated as highly toxic unless used with harmful intent. Be mindful of contextâ€”questions or discussions about language should have a lower score than direct attacks. Additionally, avoid assuming toxicity from single letters or potential mistypes. Ensure that the toxicity rating accurately reflects intent, distinguishing between casual language and genuinely harmful speech. Output only the rate number."
+muteThreshold = 91.0  # Messages with toxicity score >= 91 will be auto-muted
+enabled = true
+
+# Anti-Raid Protection System
+[antiRaid]
+enabled = true
+joinThreshold = 10  # Number of joins to trigger raid detection
+timeWindow = 30000  # 30 seconds in milliseconds
+newAccountThreshold = 86400000  # 24 hours in milliseconds
+suspiciousUsernamePatterns = [
+  "discord.gg/",
+  "free.*nitro",
+  "nitro.*free",
+  "steam.*gift",
+  "gift.*steam",
+  "robux.*free",
+  "free.*robux",
+  "minecraft.*free",
+  "free.*minecraft",
+  "hack.*client",
+  "cheat.*client",
+  "crack.*client",
+  "premium.*free",
+  "free.*premium",
+  "vip.*free",
+  "free.*vip",
+  "admin.*free",
+  "free.*admin",
+  "mod.*free",
+  "free.*mod"
+]
+
+# Anti-Nuke Protection System
+[antiNuke]
+enabled = true
+massBanThreshold = 3  # Number of bans to trigger nuke detection
+massKickThreshold = 5  # Number of kicks to trigger nuke detection
+massChannelDeleteThreshold = 2  # Number of channel deletions to trigger nuke detection
+massRoleDeleteThreshold = 2  # Number of role deletions to trigger nuke detection
+massChannelCreateThreshold = 5  # Number of channel creations to trigger nuke detection
+massRoleCreateThreshold = 5  # Number of role creations to trigger nuke detection
+timeWindow = 10000  # 10 seconds in milliseconds
+permissionEscalationRoles = [
+  "Owner",
+  "Developer",
+  "Manager",
+  "Platform Admin",
+  "System Admin",
+  "Senior Admin"
+]
+
+# Auto Chat Cooldown Configuration
+[autoCooldown]
+enabled = true
+spamThreshold = 8  # Number of messages in time window to trigger cooldown
+timeWindow = 10000  # 10 seconds in milliseconds
+cooldownDuration = 300000  # 5 minutes in milliseconds
+autoDisableDelay = 600000  # 10 minutes in milliseconds (auto-disable cooldown)
+whitelistedRoles = [
+  "Owner",
+  "Developer",
+  "Manager",
+  "Platform Admin",
+  "System Admin",
+  "Senior Admin",
+  "Admin",
+  "Senior Mod",
+  "Mod+",
+  "Mod",
+  "Trial Mod"
+]
+

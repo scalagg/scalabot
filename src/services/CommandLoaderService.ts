@@ -36,7 +36,7 @@ export class CommandLoaderService {
                 console.log('Loading command file:', fullPath);
 
                 try {
-                    const command = require(fullPath);
+                    const command = await import(fullPath);
                     console.log('Command module:', {
                         name: command?.data?.name,
                         hasData: 'data' in command,

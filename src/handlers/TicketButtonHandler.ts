@@ -28,11 +28,15 @@ export async function handleTicketButton(interaction: ButtonInteraction) {
         }
 
         // Create the modal based on the category
-        const category = interaction.customId.split('_')[1];
+        // Button ID format: ticket_staff_application -> category: staff_application
+        const category = interaction.customId.replace('ticket_', '');
+        
+        // Import category helper functions
+        const { getCategoryDisplayName } = await import('../models/Ticket');
         
         const modal = new ModalBuilder()
             .setCustomId(`ticket-${category}`)
-            .setTitle(`${category.charAt(0).toUpperCase() + category.slice(1)} Support Ticket`);
+            .setTitle(`${getCategoryDisplayName(category.toUpperCase() as any)} Ticket`);
 
         // Add the appropriate fields based on category
         const fields: TextInputBuilder[] = [];
@@ -73,25 +77,96 @@ export async function handleTicketButton(interaction: ButtonInteraction) {
 
         // Add category-specific fields
         switch (category.toUpperCase() as TicketCategory) {
-            case TicketCategory.BUYCRAFT:
+            case 'STAFF_APPLICATION':
                 fields.push(
                     new TextInputBuilder()
-                        .setCustomId('transaction-id')
-                        .setLabel('Transaction ID')
+                        .setCustomId('application-type')
+                        .setLabel('Application Type')
                         .setStyle(TextInputStyle.Short)
-                        .setPlaceholder('Enter your transaction ID')
+                        .setPlaceholder('Moderator, Admin, etc.')
+                        .setRequired(true)
+                );
+                fields.push(
+                    new TextInputBuilder()
+                        .setCustomId('experience')
+                        .setLabel('Previous Experience')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setPlaceholder('Describe your previous moderation experience')
+                        .setRequired(true)
+                        .setMinLength(10)
+                        .setMaxLength(1000)
+                );
+                fields.push(
+                    new TextInputBuilder()
+                        .setCustomId('age')
+                        .setLabel('Age')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder('Your age')
                         .setRequired(true)
                 );
                 break;
-            case TicketCategory.PUNISHMENTS:
+            case 'MEDIA_APPLICATION':
                 fields.push(
                     new TextInputBuilder()
-                        .setCustomId('punishment-type')
-                        .setLabel('Punishment Type')
+                        .setCustomId('media-type')
+                        .setLabel('Media Type')
                         .setStyle(TextInputStyle.Short)
-                        .setPlaceholder('Ban, Mute, or Warning?')
+                        .setPlaceholder('Graphics, Video, etc.')
                         .setRequired(true)
                 );
+                fields.push(
+                    new TextInputBuilder()
+                        .setCustomId('experience')
+                        .setLabel('Experience')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setPlaceholder('Describe your media creation experience')
+                        .setRequired(true)
+                        .setMinLength(10)
+                        .setMaxLength(1000)
+                );
+                break;
+            case 'PUNISHMENT_APPEAL':
+                fields.push(
+                    new TextInputBuilder()
+                        .setCustomId('appeal-reason')
+                        .setLabel('Appeal Reason')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setPlaceholder('Please explain why you are appealing')
+                        .setRequired(true)
+                        .setMinLength(10)
+                        .setMaxLength(1000)
+                );
+                break;
+            case 'BUG_REPORT':
+                fields.push(
+                    new TextInputBuilder()
+                        .setCustomId('bug-description')
+                        .setLabel('Bug Description')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setPlaceholder('Please describe the bug in detail')
+                        .setRequired(true)
+                        .setMinLength(10)
+                        .setMaxLength(1000)
+                );
+                break;
+            case 'TEBEX_SUPPORT':
+                fields.push(
+                    new TextInputBuilder()
+                        .setCustomId('tebex-order-id')
+                        .setLabel('Order ID')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder('Enter your Tebex order ID')
+                        .setRequired(true)
+                );
+                break;
+            case 'HEAD_STAFF_SUPPORT':
+                // Head staff support specific fields can be added here
+                break;
+            case 'GENERAL_SUPPORT':
+                // General support specific fields can be added here
+                break;
+            case 'OTHER':
+                // Other specific fields can be added here
                 break;
         }
 

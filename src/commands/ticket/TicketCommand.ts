@@ -66,34 +66,58 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         .setTimestamp()
         .setFooter(serverUtils.getFooter());
 
-    // Using Components v2 - create action row with buttons
-    const row = new ActionRowBuilder<ButtonBuilder>()
+    // Using Components v2 - create action rows with buttons
+    const row1 = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId('ticket_general')
+                .setCustomId('ticket_staff_application')
+                .setLabel('Staff Application')
+                .setEmoji('👑')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('ticket_media_application')
+                .setLabel('Media Application')
+                .setEmoji('📸')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('ticket_punishment_appeal')
+                .setLabel('Punishment Appeal')
+                .setEmoji('⚖️')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('ticket_bug_report')
+                .setLabel('Bug Report')
+                .setEmoji('🐛')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('ticket_tebex_support')
+                .setLabel('Tebex Support')
+                .setEmoji('🛒')
+                .setStyle(ButtonStyle.Secondary),
+        );
+
+    const row2 = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('ticket_head_staff_support')
+                .setLabel('Head Staff Support')
+                .setEmoji('👨‍💼')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('ticket_general_support')
                 .setLabel('General Support')
                 .setEmoji('🌐')
                 .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
-                .setCustomId('ticket_staff')
-                .setLabel('High Staff Support')
-                .setEmoji('👑')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('ticket_buycraft')
-                .setLabel('Buycraft Support')
-                .setEmoji('🛒')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('ticket_punishments')
-                .setLabel('Punishments Support')
-                .setEmoji('⚖️')
+                .setCustomId('ticket_other')
+                .setLabel('Other')
+                .setEmoji('❓')
                 .setStyle(ButtonStyle.Secondary),
         );
 
     await interaction.channel?.send({
         embeds: [embed],
-        components: [row]
+        components: [row1, row2]
     });
 
     await interaction.reply({

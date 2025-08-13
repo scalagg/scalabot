@@ -143,10 +143,13 @@ async function closeChannelTicket(interaction: ChatInputCommandInteraction) {
         }
 
         // Send confirmation
+        // Import category helper functions
+        const { getCategoryDisplayName } = await import('../../models/Ticket');
+        
         const embed = new EmbedBuilder()
             .setColor(serverUtils.getColor('success'))
             .setTitle('🔒 Ticket Closed')
-            .setDescription(`Ticket #${ticket.ticketNumber} has been closed.`)
+            .setDescription(`${getCategoryDisplayName(ticket.category as any)} - Ticket #${ticket.ticketNumber} has been closed.`)
             .addFields(
                 { name: '👤 Closed By', value: `${interaction.user.tag} (<@${interaction.user.id}>)`, inline: true },
                 { name: '📝 Reason', value: reason, inline: true },
@@ -232,7 +235,7 @@ async function closeUserTickets(interaction: ChatInputCommandInteraction) {
 
         if (closedTickets.length > 0) {
             const ticketList = closedTickets.map(ticket => 
-                `**#${ticket.ticketNumber}** - ${ticket.category} - <#${ticket.channelId}>`
+                `**#${ticket.ticketNumber}** - ${getCategoryDisplayName(ticket.category as any)} - <#${ticket.channelId}>`
             ).join('\n');
             
             embed.addFields({

@@ -5,7 +5,7 @@ import {
     GuildMember,
     User
 } from 'discord.js';
-import { serverUtils } from '../utils/ServerUtils';
+import { serverUtils, ServerType } from '../utils/ServerUtils';
 import { config } from '../config/config';
 
 interface PingProtectionConfig {
@@ -64,34 +64,36 @@ export class PingProtectionService {
         
         // Ignore bot messages
         if (message.author.bot) {
-            console.log('[PingProtectionService] Ignoring bot message');
             return;
         }
 
         // Ignore DMs
+        //  lol
         if (!message.guild) {
-            console.log('[PingProtectionService] Ignoring DM message');
             return;
         }
 
         // Set server type
-        serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(message.guild.id));
+        const serverType = serverUtils.getServerTypeFromGuildId(message.guild.id);
+        serverUtils.setServerType(serverType);
 
         // Check if protection is enabled
         if (!this.config.enabled) {
-            console.log('[PingProtectionService] Protection is disabled');
             return;
         }
 
         // Check if channel is whitelisted
         if (this.config.whitelistedChannels.includes(message.channel.id)) {
-            console.log(`[PingProtectionService] Channel ${message.channel instanceof TextChannel ? message.channel.name : message.channel.id} is whitelisted`);
             return;
         }
 
         // Check if user is whitelisted
         if (this.config.whitelistedUsers.includes(message.author.id)) {
-            console.log(`[PingProtectionService] User ${message.author.tag} is whitelisted`);
+            return;
+        }
+
+        // For HolyPvP, allow replies
+        if (serverType === ServerType.HOLYPVP && message.type === 19) { 
             return;
         }
 
@@ -101,13 +103,12 @@ export class PingProtectionService {
             const hasManagerRole = serverUtils.hasManagerRole(message.member);
             
             if (hasAdminRole || hasManagerRole) {
-                console.log(`[PingProtectionService] User ${message.author.tag} has admin/manager role, allowing ping`);
                 return;
             }
         }
 
         // Check for pings of protected roles
-        const violations = this.checkPings(message);
+        const violations = this.checkPings(message, serverType);
         console.log(`[PingProtectionService] Found ${violations.length} ping violations:`, violations);
         
         if (violations.length > 0) {
@@ -116,15 +117,23 @@ export class PingProtectionService {
         }
     }
 
-    private checkPings(message: Message): { user: User; role: string }[] {
+    private checkPings(message: Message, serverType: ServerType): { user: User; role: string }[] {
         const violations: { user: User; role: string }[] = [];
         
         // Get protected roles from ServerUtils
-        const adminRoles = serverUtils.getRoles().admin;
-        const managerRoles = serverUtils.getRoles().manager;
-        const protectedRoles = [...adminRoles, ...managerRoles];
+        let protectedRoles: string[];
         
-        console.log(`[PingProtectionService] Protected roles:`, protectedRoles);
+        if (serverType === ServerType.HOLYPVP) {
+            // For HolyPvP, only protect Admin roles and Manager roles
+            const adminRoles = serverUtils.getRoles().admin;
+            const managerRoles = serverUtils.getRoles().manager;
+            protectedRoles = [...adminRoles, ...managerRoles];
+        } else {
+            // For Scala, protect both Admin and Manager roles
+            const adminRoles = serverUtils.getRoles().admin;
+            const managerRoles = serverUtils.getRoles().manager;
+            protectedRoles = [...adminRoles, ...managerRoles];
+        }
 
         // Check each mentioned user
         for (const mentionedUser of message.mentions.users.values()) {
@@ -135,7 +144,6 @@ export class PingProtectionService {
                     for (const role of member.roles.cache.values()) {
                         if (protectedRoles.includes(role.name)) {
                             violations.push({ user: mentionedUser, role: role.name });
-                            console.log(`[PingProtectionService] Found ping violation: ${mentionedUser.tag} has role ${role.name}`);
                             break; // Only count each user once
                         }
                     }

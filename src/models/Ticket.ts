@@ -2,10 +2,92 @@ import { Schema, model } from 'mongoose';
 import { ObjectId } from 'mongodb';
 
 export enum TicketCategory {
-    GENERAL = 'GENERAL',
-    STAFF = 'STAFF',
-    BUYCRAFT = 'BUYCRAFT',
-    PUNISHMENTS = 'PUNISHMENTS'
+    STAFF_APPLICATION = 'STAFF_APPLICATION',
+    MEDIA_APPLICATION = 'MEDIA_APPLICATION',
+    PUNISHMENT_APPEAL = 'PUNISHMENT_APPEAL',
+    BUG_REPORT = 'BUG_REPORT',
+    TEBEX_SUPPORT = 'TEBEX_SUPPORT',
+    HEAD_STAFF_SUPPORT = 'HEAD_STAFF_SUPPORT',
+    GENERAL_SUPPORT = 'GENERAL_SUPPORT',
+    OTHER = 'OTHER'
+}
+
+// Helper functions for category management
+export function getCategoryDisplayName(category: TicketCategory): string {
+    const displayNames: Record<TicketCategory, string> = {
+        [TicketCategory.STAFF_APPLICATION]: 'Staff Application',
+        [TicketCategory.MEDIA_APPLICATION]: 'Media Application',
+        [TicketCategory.PUNISHMENT_APPEAL]: 'Punishment Appeal',
+        [TicketCategory.BUG_REPORT]: 'Bug Report',
+        [TicketCategory.TEBEX_SUPPORT]: 'Tebex Support',
+        [TicketCategory.HEAD_STAFF_SUPPORT]: 'Head Staff Support',
+        [TicketCategory.GENERAL_SUPPORT]: 'General Support',
+        [TicketCategory.OTHER]: 'Other'
+    };
+    return displayNames[category];
+}
+
+export function getCategoryChannelPrefix(category: TicketCategory): string {
+    const prefixes: Record<TicketCategory, string> = {
+        [TicketCategory.STAFF_APPLICATION]: 'staff-app',
+        [TicketCategory.MEDIA_APPLICATION]: 'media-app',
+        [TicketCategory.PUNISHMENT_APPEAL]: 'appeal',
+        [TicketCategory.BUG_REPORT]: 'bug',
+        [TicketCategory.TEBEX_SUPPORT]: 'tebex',
+        [TicketCategory.HEAD_STAFF_SUPPORT]: 'head-staff',
+        [TicketCategory.GENERAL_SUPPORT]: 'general',
+        [TicketCategory.OTHER]: 'other'
+    };
+    return prefixes[category];
+}
+
+export function getCategoryDiscordCategory(category: TicketCategory): string {
+    const categories: Record<TicketCategory, string> = {
+        [TicketCategory.STAFF_APPLICATION]: 'Staff Applications',
+        [TicketCategory.MEDIA_APPLICATION]: 'Media Applications',
+        [TicketCategory.PUNISHMENT_APPEAL]: 'Punishment Appeals',
+        [TicketCategory.BUG_REPORT]: 'Bug Reports',
+        [TicketCategory.TEBEX_SUPPORT]: 'Tebex Support',
+        [TicketCategory.HEAD_STAFF_SUPPORT]: 'Head Staff Support',
+        [TicketCategory.GENERAL_SUPPORT]: 'General Support',
+        [TicketCategory.OTHER]: 'Other Support'
+    };
+    return categories[category];
+}
+
+export function getCategoryColor(category: TicketCategory): string {
+    const colors: Record<TicketCategory, string> = {
+        [TicketCategory.STAFF_APPLICATION]: '#FF6B6B',      // Red
+        [TicketCategory.MEDIA_APPLICATION]: '#4ECDC4',      // Teal
+        [TicketCategory.PUNISHMENT_APPEAL]: '#FEE75C',      // Yellow
+        [TicketCategory.BUG_REPORT]: '#E74C3C',            // Red
+        [TicketCategory.TEBEX_SUPPORT]: '#57F287',         // Green
+        [TicketCategory.HEAD_STAFF_SUPPORT]: '#9B59B6',    // Purple
+        [TicketCategory.GENERAL_SUPPORT]: '#5865F2',       // Blue
+        [TicketCategory.OTHER]: '#95A5A6'                  // Gray
+    };
+    return colors[category];
+}
+
+export function getCategoryRequiredRoles(category: TicketCategory): string[] {
+    const roles: Record<TicketCategory, string[]> = {
+        [TicketCategory.STAFF_APPLICATION]: ['manager'], // Manager roles
+        [TicketCategory.MEDIA_APPLICATION]: ['admin'],   // Admin roles
+        [TicketCategory.PUNISHMENT_APPEAL]: ['staff'],   // Staff roles
+        [TicketCategory.BUG_REPORT]: ['admin'],         // Admin roles
+        [TicketCategory.TEBEX_SUPPORT]: ['manager', 'tebex'], // Manager roles + specific role ID
+        [TicketCategory.HEAD_STAFF_SUPPORT]: ['admin'], // Admin roles
+        [TicketCategory.GENERAL_SUPPORT]: ['trainee', 'staff'], // Trainee and Staff roles
+        [TicketCategory.OTHER]: ['trainee', 'staff']    // Trainee and Staff roles
+    };
+    return roles[category];
+}
+
+export function getCategorySpecificRoleId(category: TicketCategory): string | null {
+    if (category === TicketCategory.TEBEX_SUPPORT) {
+        return '1310317635346628668';
+    }
+    return null;
 }
 
 export interface TicketMetadata {
@@ -14,6 +96,15 @@ export interface TicketMetadata {
         gameMode?: string;
     };
     issue?: string;
+    applicationType?: string;
+    appealReason?: string;
+    bugDescription?: string;
+    tebexOrderId?: string;
+    mediaType?: string;
+    experience?: string;
+    age?: string;
+    timezone?: string;
+    availability?: string;
     [key: string]: any;
 }
 

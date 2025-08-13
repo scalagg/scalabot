@@ -182,7 +182,10 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
                 await GiveawayButtonHandler.handle(buttonInteraction);
             }
             // Handle ticket creation buttons specifically (must come before general ticket handling)
-            else if (buttonInteraction.customId.startsWith('ticket_') && ['general', 'staff', 'buycraft', 'punishments'].some(type => buttonInteraction.customId === `ticket_${type}`)) {
+            else if (buttonInteraction.customId.startsWith('ticket_') && [
+                'staff_application', 'media_application', 'punishment_appeal', 'bug_report', 
+                'tebex_support', 'head_staff_support', 'general_support', 'other'
+            ].some(type => buttonInteraction.customId === `ticket_${type}`)) {
                 await handleTicketButton(buttonInteraction);
             }
             // Handle role menu buttons and other general buttons

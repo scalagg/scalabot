@@ -94,7 +94,7 @@ async function showStatus(interaction: ChatInputCommandInteraction) {
         const mongoConnected = mongoService.isConnectedToMongo();
         
         // Get ticket categories
-        const categories = ['GENERAL', 'STAFF', 'BUYCRAFT', 'PUNISHMENTS'];
+        const categories = ['STAFF_APPLICATION', 'MEDIA_APPLICATION', 'PUNISHMENT_APPEAL', 'BUG_REPORT', 'TEBEX_SUPPORT', 'HEAD_STAFF_SUPPORT', 'GENERAL_SUPPORT', 'OTHER'];
         const categoryStats = await Promise.all(
             categories.map(async (category) => {
                 const categoryTickets = allTickets.filter(ticket => ticket.category === category);
@@ -119,9 +119,12 @@ async function showStatus(interaction: ChatInputCommandInteraction) {
             .setTimestamp()
             .setFooter(serverUtils.getFooter());
 
+        // Import category helper functions
+        const { getCategoryDisplayName } = await import('../../models/Ticket');
+        
         // Add category statistics
         const categoryText = categoryStats.map(stat => 
-            `${stat.category}: ${stat.open}/${stat.count}`
+            `${getCategoryDisplayName(stat.category as any)}: ${stat.open}/${stat.count}`
         ).join('\n');
         
         embed.addFields({
@@ -188,7 +191,7 @@ async function showUserTickets(interaction: ChatInputCommandInteraction) {
         const recentTickets = userTickets.slice(0, 5);
         if (recentTickets.length > 0) {
             const recentText = recentTickets.map(ticket => 
-                `**${ticket.status}** - ${ticket.category} - <#${ticket.channelId}> - ${new Date(ticket.createdAt).toLocaleDateString()}`
+                `**${ticket.status}** - ${getCategoryDisplayName(ticket.category as any)} - <#${ticket.channelId}> - ${new Date(ticket.createdAt).toLocaleDateString()}`
             ).join('\n');
             
             embed.addFields({
@@ -201,7 +204,7 @@ async function showUserTickets(interaction: ChatInputCommandInteraction) {
         // Show open ticket details
         if (openTickets.length > 0) {
             const openText = openTickets.map(ticket => 
-                `**${ticket.category}** - <#${ticket.channelId}> - ${ticket.claimedBy ? `Claimed by <@${ticket.claimedBy}>` : 'Unclaimed'}`
+                `**${getCategoryDisplayName(ticket.category as any)}** - <#${ticket.channelId}> - ${ticket.claimedBy ? `Claimed by <@${ticket.claimedBy}>` : 'Unclaimed'}`
             ).join('\n');
             
             embed.addFields({
@@ -245,7 +248,7 @@ async function showChannelTicket(interaction: ChatInputCommandInteraction) {
             .addFields(
                 { name: '🆔 Ticket ID', value: ticket._id?.toString() || 'Unknown', inline: true },
                 { name: '📝 Ticket Number', value: ticket.ticketNumber.toString(), inline: true },
-                { name: '📂 Category', value: ticket.category, inline: true },
+                { name: '📂 Category', value: getCategoryDisplayName(ticket.category as any), inline: true },
                 { name: '👤 Created By', value: `<@${ticket.userId}>`, inline: true },
                 { name: '📅 Created', value: new Date(ticket.createdAt).toLocaleString(), inline: true },
                 { name: '📊 Status', value: ticket.status, inline: true }
@@ -334,7 +337,7 @@ async function listAllTickets(interaction: ChatInputCommandInteraction) {
             ).join('\n');
             
             embed.addFields({
-                name: `${category} (${tickets.length})`,
+                name: `${getCategoryDisplayName(category as any)} (${tickets.length})`,
                 value: categoryText.length > 1024 ? categoryText.substring(0, 1021) + '...' : categoryText,
                 inline: false
             });
