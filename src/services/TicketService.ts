@@ -338,8 +338,7 @@ export class TicketService {
                     .setEmoji('👥')
             );
 
-        const staffPings = staffRoleIds.map(roleId => `<@&${roleId}>`).join(' ');
-        const pingMessage = `🎫 **New Ticket Created!**\n\n👤 **User:** <@${ticket.userId}>\n👥 **Staff Team:** ${staffPings}\n\nPlease respond to this ticket as soon as possible.`;
+        const pingMessage = `🎫 **New Ticket Created!**\n\n👤 **User:** <@${ticket.userId}>\n👥 **Staff Team:** @everyone\n\nPlease respond to this ticket as soon as possible.`;
 
         // Send the initial message with ping, embed and buttons
         await channel.send({

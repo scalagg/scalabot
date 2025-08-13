@@ -296,16 +296,7 @@ export async function createTicketChannel(
         );
 
     // Create ping message for staff and user
-    const staffRoles = serverUtils.getRoles().staff;
-    const staffPings = staffRoles
-        .map(roleName => {
-            const role = interaction.guild!.roles.cache.find(r => r.name === roleName);
-            return role ? `<@&${role.id}>` : null;
-        })
-        .filter(Boolean)
-        .join(' ');
-
-    const pingMessage = `🎫 **New Ticket Created!**\n\n👤 **User:** <@${interaction.user.id}>\n👥 **Staff Team:** ${staffPings}\n\nPlease respond to this ticket as soon as possible.`;
+    const pingMessage = `🎫 **New Ticket Created!**\n\n👤 **User:** <@${interaction.user.id}>\n👥 **Staff Team:** @everyone\n\nPlease respond to this ticket as soon as possible.`;
 
     await channel.send({
         content: pingMessage,
