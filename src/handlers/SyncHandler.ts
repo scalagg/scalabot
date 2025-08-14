@@ -5,7 +5,7 @@ import { serverUtils } from '../utils/ServerUtils';
 import { config } from '../config/config';
 
 export class SyncHandler {
-    private syncChannelId: string = config.syncChannelId || '1234567890123456789'; // Use config or fallback
+    private syncChannelId: string = config.syncChannelId || ''; // Use config or empty string for auto-creation
     private syncPrefix: string = '!';
 
     public handleMessage(message: Message): void {

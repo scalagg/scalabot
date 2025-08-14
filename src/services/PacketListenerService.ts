@@ -309,16 +309,22 @@ export class PacketListenerService {
 
     private async handleUuidCacheUpdate(data: any): Promise<void> {
         try {
-            if (!data._id || !data.username) {
-                console.warn('[PacketListener] UUID cache update packet missing required data');
+            // Parse the data if it's a JSON string
+            let parsedData = data;
+            if (typeof data === 'string') {
+                parsedData = JSON.parse(data);
+            }
+
+            if (!parsedData._id || !parsedData.username) {
+                console.warn('[PacketListener] UUID cache update packet missing required data:', parsedData);
                 return;
             }
 
             // Update the UUID cache in the LeaderboardService
             const { leaderboardService } = await import('./LeaderboardService');
-            leaderboardService.updateUuidCache(data._id, data.username);
+            leaderboardService.updateUuidCache(parsedData._id, parsedData.username);
             
-            console.log(`[PacketListener] Updated UUID cache: ${data._id} -> ${data.username}`);
+            console.log(`[PacketListener] Updated UUID cache: ${parsedData._id} -> ${parsedData.username}`);
         } catch (error) {
             console.error('[PacketListener] Error handling UUID cache update packet:', error);
             sentryService.captureException(error as Error, {

@@ -21,7 +21,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         // Find or create sync channel
         let syncChannel = guild.channels.cache.find(channel => 
             channel.name === '💻sync' && channel.type === 0
-        );
+        ) as any;
 
         if (!syncChannel) {
             syncChannel = await guild.channels.create({

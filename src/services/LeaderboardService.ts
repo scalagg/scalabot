@@ -1,6 +1,6 @@
 import { EmbedBuilder, ColorResolvable } from 'discord.js';
 import { sentryService } from './SentryService';
-import { serverUtils } from '../utils/ServerUtils';
+import { serverUtils, ServerType } from '../utils/ServerUtils';
 import { mongoService } from './MongoService';
 import { MongoClient } from 'mongodb';
 import { config } from '../config/config';
@@ -337,23 +337,21 @@ export class LeaderboardService {
                         continue;
                     }
 
-                    const embed = this.createLeaderboardEmbed(type);
-                    const lastMessageId = this.lastMessageIds.get(type);
-                    
-                    if (lastMessageId) {
-                        try {
-                            const lastMessage = await channel.messages.fetch(lastMessageId);
-                            if (lastMessage && lastMessage.author.id === this.client.user.id) {
-                                await lastMessage.edit({ embeds: [embed] });
-                                console.log(`[LeaderboardService] Updated leaderboard message for ${type}`);
-                                continue;
-                            }
-                        } catch (error) {
-                            console.log(`[LeaderboardService] Could not fetch last message for ${type}, creating new one`);
+                    // Delete all previous bot messages in the channel
+                    try {
+                        const messages = await channel.messages.fetch({ limit: 10 });
+                        const botMessages = messages.filter((msg: any) => msg.author.id === this.client.user.id);
+                        
+                        if (botMessages.size > 0) {
+                            await channel.bulkDelete(botMessages);
+                            console.log(`[LeaderboardService] Deleted ${botMessages.size} previous bot messages for ${type}`);
                         }
+                    } catch (error) {
+                        console.log(`[LeaderboardService] Could not delete previous messages for ${type}:`, error);
                     }
 
-                    // Create new message if no last message or couldn't edit
+                    // Create new message
+                    const embed = this.createLeaderboardEmbed(type);
                     const newMessage = await channel.send({ embeds: [embed] });
                     this.lastMessageIds.set(type, newMessage.id);
                     console.log(`[LeaderboardService] Created new leaderboard message for ${type}`);
@@ -385,6 +383,9 @@ export class LeaderboardService {
 
     public createLeaderboardEmbed(type: LeaderboardType): EmbedBuilder {
         const leaderboards = this.getLeaderboards(type);
+        
+        // Force HolyPvP branding for leaderboards
+        serverUtils.setServerType(ServerType.HOLYPVP);
         const theme = serverUtils.getTheme();
         const info = serverUtils.getInfo();
 
