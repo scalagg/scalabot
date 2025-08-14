@@ -53,6 +53,10 @@ import { antiNukeService } from './services/AntiNukeService';
 import { autoCooldownService } from './services/AutoCooldownService';
 import { sentryService } from './services/SentryService';
 import { data as roleMenuData, execute as roleMenuExecute } from './commands/management/rolemenu';
+import { syncHandler } from './handlers/SyncHandler';
+import { packetListenerService } from './services/PacketListenerService';
+import { redisService } from './services/RedisService';
+import { leaderboardService } from './services/LeaderboardService';
 
 // Create Discord client
 const client = new Client({
@@ -149,6 +153,23 @@ client.once(Events.ClientReady, async (readyClient) => {
         // Mark as initialized
         isInitialized = true;
         console.log('All services initialized successfully');
+
+        // Setup sync channels for all guilds
+        for (const guild of client.guilds.cache.values()) {
+            await syncHandler.setupSyncChannel(guild);
+        }
+        console.log('Sync channels setup completed');
+
+        // Initialize packet listener for role updates
+        packetListenerService.setClient(client);
+        packetListenerService.setRedis(redisService.getRedis());
+        await packetListenerService.startListening();
+        console.log('Packet listener initialized');
+
+        // Initialize leaderboard service
+        leaderboardService.setClient(client);
+        await leaderboardService.startRefreshLoop();
+        console.log('Leaderboard service initialized');
     } catch (error) {
         console.error('Error during initialization:', error);
         process.exit(1); // Exit if initialization fails
@@ -403,7 +424,7 @@ client.on(Events.GuildMemberRemove, async (member) => {
     }
 });
 
-// Handle message events for auto-moderation
+// Handle message events for auto-moderation and sync
 client.on(Events.MessageCreate, async (message: Message) => {
     try {
         // Check if services are initialized
@@ -415,6 +436,9 @@ client.on(Events.MessageCreate, async (message: Message) => {
         if (message.author.bot || !message.guild) {
             return;
         }
+
+        // Handle sync messages first
+        syncHandler.handleMessage(message);
 
         // Skip if automoderation is disabled
         if (!config.geminiConfig.enabled) {
@@ -537,12 +561,16 @@ client.login(config.token);
 // Handle process exit to properly close Sentry
 process.on('SIGINT', async () => {
     console.log('Shutting down gracefully...');
+    await packetListenerService.stopListening();
+    await leaderboardService.stopRefreshLoop();
     await sentryService.close();
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
     console.log('Shutting down gracefully...');
+    await packetListenerService.stopListening();
+    await leaderboardService.stopRefreshLoop();
     await sentryService.close();
     process.exit(0);
 });

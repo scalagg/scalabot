@@ -11,6 +11,15 @@
 		},
 		{
 			"path": "../fyre-api"
+		},
+		{
+			"path": "../../Fyre Games/discord"
+		},
+		{
+			"path": "../../Fyre Games/circuit"
+		},
+		{
+			"path": "../../Fyre Games/Core"
 		}
 	],
 	"settings": {

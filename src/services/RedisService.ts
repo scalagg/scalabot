@@ -156,6 +156,10 @@ class RedisService {
             this.redis.disconnect();
         }
     }
+
+    getRedis(): Redis {
+        return this.redis;
+    }
 }
 
 export const redisService = new RedisService(); 

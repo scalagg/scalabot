@@ -7,6 +7,9 @@ interface BotConfig {
   welcomeChannelId: string;
   ticketLogsChannelId: string;
   punishmentLogsChannelId: string;
+      syncChannelId?: string;
+    circuitChannel?: string;
+    leaderboardChannels?: Record<string, string>;
   apiBaseUrl: string;
   apiKey: string;
   mongoUri: string;
@@ -257,6 +260,21 @@ class Config {
       ]
     };
   }
+
+  public     get syncChannelId(): string | undefined {
+        return this.config.syncChannelId;
+    }
+
+    get circuitChannel(): string {
+        return this.config.circuitChannel || 'circuit';
+    }
+
+    get leaderboardChannels(): Record<string, string> {
+        return this.config.leaderboardChannels || {
+            'KitMap': '',
+            'Inferno': ''
+        };
+    }
 }
 
 // Export a type-safe config object with all the getters
@@ -265,6 +283,7 @@ export const config = {
   get welcomeChannelId() { return Config.getInstance().welcomeChannelId; },
   get ticketLogsChannelId() { return Config.getInstance().ticketLogsChannelId; },
   get punishmentLogsChannelId() { return Config.getInstance().punishmentLogsChannelId; },
+  get syncChannelId() { return Config.getInstance().syncChannelId; },
   get apiBaseUrl() { return Config.getInstance().apiBaseUrl; },
   get apiKey() { return Config.getInstance().apiKey; },
   get mongoUri() { return Config.getInstance().mongoUri; },
@@ -281,5 +300,7 @@ export const config = {
   get welcomeMessage() { return Config.getInstance().welcomeMessage; },
   get deeplApiKey() { return Config.getInstance().deeplApiKey; },
   get sentryDsn() { return Config.getInstance().sentryDsn; },
-  get environment() { return Config.getInstance().environment; }
+  get environment() { return Config.getInstance().environment; },
+  get circuitChannel() { return Config.getInstance().circuitChannel; },
+  get leaderboardChannels() { return Config.getInstance().leaderboardChannels; }
 } as const; 
