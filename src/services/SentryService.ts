@@ -1,5 +1,4 @@
 import * as Sentry from '@sentry/node';
-import { ProfilingIntegration } from '@sentry/profiling-node';
 import { config } from '../config/config';
 
 export class SentryService {
@@ -41,13 +40,9 @@ export class SentryService {
                         // Don't instrument these modules
                         exclude: ['@sentry/node']
                     }),
-                    // Enable profiling
-                    new ProfilingIntegration(),
                 ],
                 // Performance Monitoring
                 tracesSampleRate: 0.1, // Capture 10% of transactions
-                // Set sampling rate for profiling - this is relative to tracesSampleRate
-                profilesSampleRate: 0.1,
                 // Enable debug mode in development
                 debug: config.environment === 'development',
                 // Before sending event to Sentry

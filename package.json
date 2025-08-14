@@ -30,8 +30,7 @@
     "simple-async-sleep": "^1.0.3",
     "toml": "^3.0.0",
     "undici": "^5.5.1",
-    "@sentry/node": "^7.108.0",
-    "@sentry/integrations": "^7.108.0"
+    "@sentry/node": "^7.108.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
