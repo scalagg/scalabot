@@ -15,6 +15,8 @@ interface BotConfig {
   redisPort: number;
   redisPassword?: string;
   testGuildId?: string;
+  sentryDsn?: string;
+  environment?: string;
   gemini?: {
     apiKey: string;
     apiEndpoint: string;
@@ -175,6 +177,14 @@ class Config {
     return this.config.deeplApiKey;
   }
 
+  public get sentryDsn(): string | undefined {
+    return this.config.sentryDsn;
+  }
+
+  public get environment(): string {
+    return this.config.environment || 'production';
+  }
+
   public get antiRaidConfig() {
     return this.config.antiRaid || {
       enabled: true,
@@ -269,5 +279,7 @@ export const config = {
   get autoCooldownConfig() { return Config.getInstance().autoCooldownConfig; },
   get welcomeImageConfig() { return Config.getInstance().welcomeImageConfig; },
   get welcomeMessage() { return Config.getInstance().welcomeMessage; },
-  get deeplApiKey() { return Config.getInstance().deeplApiKey; }
+  get deeplApiKey() { return Config.getInstance().deeplApiKey; },
+  get sentryDsn() { return Config.getInstance().sentryDsn; },
+  get environment() { return Config.getInstance().environment; }
 } as const; 

@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import type DiscordProfile from '../models/DiscordProfile';
 import { config } from '../config/config';
+import { sentryService } from './SentryService';
 
 class RedisService {
     private redis: Redis;
@@ -36,6 +37,9 @@ class RedisService {
 
         this.redis.on('error', (error) => {
             console.error('Redis connection error:', error);
+            sentryService.captureException(error as Error, {
+                context: 'redis_connection_error'
+            });
             this.isConnected = false;
         });
 
@@ -64,6 +68,10 @@ class RedisService {
             return result;
         } catch (error) {
             console.error('Error getting sync code:', error);
+            sentryService.captureException(error as Error, {
+                context: 'redis_get_sync_code',
+                code: code
+            });
             return null;
         }
     }
@@ -77,6 +85,11 @@ class RedisService {
             console.log(`Sync code stored for ${code} and ${uuid}`);
         } catch (error) {
             console.error('Error storing sync code:', error);
+            sentryService.captureException(error as Error, {
+                context: 'redis_store_sync_code',
+                code: code,
+                uuid: uuid
+            });
             throw error;
         }
     }

@@ -1,6 +1,7 @@
 import { TextChannel, Message, EmbedBuilder, AttachmentBuilder } from 'discord.js';
 import { config } from '../config/config';
 import { Ticket } from '../models/Ticket';
+import { sentryService } from './SentryService';
 
 export class TranscriptService {
     private static instance: TranscriptService;
@@ -168,6 +169,12 @@ export class TranscriptService {
 
         } catch (error) {
             console.error('[TranscriptService] Error saving transcript:', error);
+            sentryService.captureException(error as Error, {
+                context: 'transcript_save',
+                guild_id: channel.guild.id,
+                channel_id: channel.id,
+                ticket_id: ticket._id?.toString()
+            });
             throw error;
         }
     }

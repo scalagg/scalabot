@@ -2,6 +2,7 @@ import { Message, EmbedBuilder, MessageContextMenuCommandInteraction } from 'dis
 import fetch from 'node-fetch';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
+import { sentryService } from './SentryService';
 
 // DeepL API Response Types
 interface DeepLTranslation {
@@ -102,6 +103,12 @@ class TranslationService {
             await interaction.editReply({ embeds: [embed] });
         } catch (error) {
             console.error('[TranslationService] Error translating message:', error);
+            sentryService.captureException(error as Error, {
+                context: 'translation_message',
+                guild_id: interaction.guildId,
+                user_id: interaction.user.id,
+                message_id: interaction.targetMessage.id
+            });
             await interaction.editReply({
                 content: '❌ An error occurred while translating the message.'
             });
@@ -145,6 +152,10 @@ class TranslationService {
             };
         } catch (error) {
             console.error('[TranslationService] Error translating for moderation:', error);
+            sentryService.captureException(error as Error, {
+                context: 'translation_moderation',
+                message_content_length: messageContent.length
+            });
             return { translatedText: null, originalLanguage: 'EN' };
         }
     }

@@ -1,5 +1,6 @@
 import { ModalSubmitInteraction, TextChannel } from 'discord.js';
 import { ticketService } from '../services/TicketService';
+import { sentryService } from '../services/SentryService';
 import { verifyMinecraftUsername } from '../utils/minecraftUtils';
 import { TicketCategory } from '../models/Ticket';
 
@@ -45,13 +46,13 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
         }
 
         // Check ticket limits
-        const serverTickets = await ticketService.getOpenTicketCount(interaction.guildId!);
-        if (serverTickets >= 50) {
-            await interaction.editReply({
-                content: '❌ The server has reached the maximum number of open tickets (50). Please try again later.'
-            });
-            return;
-        }
+        // const serverTickets = await ticketService.getOpenTicketCount(interaction.guildId!);
+        // if (serverTickets >= 250) {
+        //     await interaction.editReply({
+        //         content: '❌ The server has reached the maximum number of open tickets (50). Please try again later.'
+        //     });
+        //     return;
+        // }
 
         const userTickets = await ticketService.getUserOpenTickets(interaction.user.id, interaction.guildId!);
         if (userTickets >= 2) {
@@ -69,32 +70,86 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
         });
 
         try {
-            // Create the ticket
-            const ticket = await ticketService.createTicket({
-                userId: interaction.user.id,
-                guildId: interaction.guildId!,
-                category,
-                fields
-            });
+            // Create the ticket with a timeout
+            const ticket = await Promise.race([
+                ticketService.createTicket({
+                    userId: interaction.user.id,
+                    guildId: interaction.guildId!,
+                    category,
+                    fields
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Ticket creation timeout')), 25000)
+                )
+            ]) as any;
 
             console.log('[TicketModal] Ticket created successfully:', {
                 ticketId: ticket._id?.toString(),
                 channelId: ticket.channelId
             });
 
-            await interaction.editReply({
-                content: `✅ Your ticket has been created: <#${ticket.channelId}>`
-            });
+            // Check if interaction is still valid before replying
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: `✅ Your ticket has been created: <#${ticket.channelId}>`,
+                    ephemeral: true
+                });
+            } else {
+                await interaction.editReply({
+                    content: `✅ Your ticket has been created: <#${ticket.channelId}>`
+                });
+            }
 
         } catch (error) {
             console.error('[TicketModal] Error creating ticket:', error);
-            await interaction.editReply({
-                content: '❌ An error occurred while creating your ticket. Please try again.'
+            
+            // Capture error in Sentry
+            sentryService.captureException(error as Error, {
+                context: 'ticket_creation',
+                user_id: interaction.user.id,
+                guild_id: interaction.guildId,
+                category: category,
+                fields: Object.keys(fields)
             });
+            
+            let errorMessage = '❌ An error occurred while creating your ticket. Please try again.';
+            
+            // Provide more specific error messages
+            if (error instanceof Error) {
+                if (error.message === 'Ticket creation timeout') {
+                    errorMessage = '❌ Ticket creation timed out. Please try again.';
+                } else if (error.message.includes('Category channel')) {
+                    errorMessage = '❌ Could not create ticket: Required Discord category not found. Please contact an administrator.';
+                } else if (error.message.includes('Guild not found')) {
+                    errorMessage = '❌ Could not create ticket: Server not found.';
+                } else if (error.message.includes('Member not found')) {
+                    errorMessage = '❌ Could not create ticket: User not found in server.';
+                }
+            }
+            
+            // Check if interaction is still valid before replying
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: errorMessage,
+                    ephemeral: true
+                });
+            } else {
+                await interaction.editReply({
+                    content: errorMessage
+                });
+            }
         }
 
     } catch (error) {
         console.error('[TicketModal] Error handling modal submission:', error);
+        
+        // Capture error in Sentry
+        sentryService.captureException(error as Error, {
+            context: 'modal_submission',
+            user_id: interaction.user?.id,
+            guild_id: interaction.guildId,
+            custom_id: interaction.customId
+        });
         
         // Handle the case where the interaction might have already been replied to
         try {
@@ -110,6 +165,10 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
             }
         } catch (replyError) {
             console.error('[TicketModal] Error sending error response:', replyError);
+            sentryService.captureException(replyError as Error, {
+                context: 'modal_error_response',
+                original_error: error instanceof Error ? error.message : 'Unknown error'
+            });
         }
     }
 } 

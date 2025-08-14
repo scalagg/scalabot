@@ -7,6 +7,7 @@ import {
 } from 'discord.js';
 import { serverUtils, ServerType } from '../utils/ServerUtils';
 import { config } from '../config/config';
+import { sentryService } from './SentryService';
 
 interface PingProtectionConfig {
     enabled: boolean;
@@ -231,6 +232,12 @@ export class PingProtectionService {
 
         } catch (error) {
             console.error('[PingProtectionService] Error handling violation:', error);
+            sentryService.captureException(error as Error, {
+                context: 'ping_protection_violation',
+                guild_id: message.guild?.id,
+                user_id: message.author.id,
+                channel_id: message.channel.id
+            });
         }
     }
 
@@ -258,6 +265,12 @@ export class PingProtectionService {
             }
         } catch (error) {
             console.error('[PingProtectionService] Error logging violation:', error);
+            sentryService.captureException(error as Error, {
+                context: 'ping_protection_log',
+                guild_id: message.guild?.id,
+                user_id: message.author.id,
+                channel_id: message.channel.id
+            });
         }
     }
 
@@ -289,6 +302,10 @@ export class PingProtectionService {
             return null;
         } catch (error) {
             console.error('[PingProtectionService] Error getting log channel:', error);
+            sentryService.captureException(error as Error, {
+                context: 'ping_protection_get_channel',
+                guild_id: guild.id
+            });
             return null;
         }
     }

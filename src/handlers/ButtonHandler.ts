@@ -1,6 +1,7 @@
 import { ButtonInteraction } from 'discord.js';
 import { handleButton as handleVerifyButton } from '../commands/deployverify';
 import { handleTicketButton } from './TicketButtonHandler';
+import { sentryService } from '../services/SentryService';
 
 export async function handleButton(interaction: ButtonInteraction) {
     const { customId } = interaction;
@@ -34,6 +35,12 @@ export async function handleButton(interaction: ButtonInteraction) {
         console.log(`[ButtonHandler] Unknown button interaction: ${customId}`);
     } catch (error) {
         console.error('[ButtonHandler] Error handling button interaction:', error);
+        sentryService.captureException(error as Error, {
+            context: 'button_handler',
+            custom_id: customId,
+            user_id: interaction.user.id,
+            guild_id: interaction.guildId
+        });
         try {
             await interaction.reply({
                 content: '❌ An error occurred while processing your request.',
@@ -41,6 +48,11 @@ export async function handleButton(interaction: ButtonInteraction) {
             });
         } catch (replyError) {
             console.error('[ButtonHandler] Error sending error reply:', replyError);
+            sentryService.captureException(replyError as Error, {
+                context: 'button_handler_reply',
+                custom_id: customId,
+                user_id: interaction.user.id
+            });
         }
     }
 } 

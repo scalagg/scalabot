@@ -2,6 +2,7 @@ import { Client, Message, GuildMember, TextChannel, EmbedBuilder } from 'discord
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
 import { moderationService } from './ModerationService';
+import { sentryService } from './SentryService';
 import { translationService } from './TranslationService';
 
 interface GeminiRequest {
@@ -231,6 +232,13 @@ export class AutoModerationService {
 
         } catch (error) {
             console.error('[AutoModeration] Error calling Gemini API:', error);
+            sentryService.captureException(error as Error, {
+                context: 'automoderation_api_call',
+                guild_id: message.guild?.id,
+                user_id: message.author.id,
+                channel_id: message.channel.id,
+                api_token: apiToken ? 'present' : 'missing'
+            });
             this.markTokenFailure(apiToken);
         }
     }

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import type { Collection, Document } from 'mongodb';
 import { config } from '../config/config';
+import { sentryService } from './SentryService';
 
 class MongoService {
     private static instance: MongoService;
@@ -50,6 +51,9 @@ class MongoService {
             // Handle connection errors
             mongoose.connection.on('error', (error) => {
                 console.error('[MongoDB] Connection error:', error);
+                sentryService.captureException(error as Error, {
+                    context: 'mongodb_connection_error'
+                });
                 this.isConnected = false;
             });
 
@@ -60,6 +64,10 @@ class MongoService {
 
         } catch (error) {
             console.error('[MongoDB] Connection failed:', error);
+            sentryService.captureException(error as Error, {
+                context: 'mongodb_connection',
+                mongo_uri: config.mongoUri ? 'present' : 'missing'
+            });
             this.connectionPromise = null;
             this.isConnected = false;
             throw error;

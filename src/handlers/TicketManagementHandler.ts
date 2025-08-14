@@ -22,6 +22,7 @@ import {
 } from 'discord.js';
 import { ticketService } from '../services/TicketService';
 import { transcriptService } from '../services/TranscriptService';
+import { sentryService } from '../services/SentryService';
 import { ObjectId } from 'mongodb';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
@@ -53,9 +54,9 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
         if (interaction.isStringSelectMenu()) {
             switch (interaction.customId) {
                 case 'ticket_add_user_select':
+                    const addUserId = interaction.values[0];
                     try {
-                        const userId = interaction.values[0];
-                        await ticketService.addUserToTicket(ticket._id!, userId);
+                        await ticketService.addUserToTicket(ticket._id!, addUserId);
 
                         // Send ephemeral confirmation
                         await interaction.reply({
@@ -66,10 +67,18 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                         // Send public announcement
                         if (interaction.channel instanceof TextChannel) {
                             await interaction.channel.send({
-                                content: `<@${userId}> has been added to the ticket.`
+                                content: `<@${addUserId}> has been added to the ticket.`
                             });
                         }
                     } catch (error) {
+                        console.error('[TicketManagement] Error adding user to ticket:', error);
+                        sentryService.captureException(error as Error, {
+                            context: 'ticket_add_user',
+                            user_id: interaction.user.id,
+                            guild_id: interaction.guildId,
+                            ticket_id: ticket._id?.toString(),
+                            target_user_id: addUserId
+                        });
                         await interaction.reply({
                             content: `❌ Failed to add user: ${error instanceof Error ? error.message : 'Unknown error'}`,
                             flags: 1 << 6
@@ -78,9 +87,9 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                     return;
 
                 case 'ticket_remove_user_select':
+                    const removeUserId = interaction.values[0];
                     try {
-                        const userId = interaction.values[0];
-                        await ticketService.removeUserFromTicket(ticket._id!, userId);
+                        await ticketService.removeUserFromTicket(ticket._id!, removeUserId);
 
                         // Send ephemeral confirmation
                         await interaction.reply({
@@ -91,10 +100,18 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                         // Send public announcement
                         if (interaction.channel instanceof TextChannel) {
                             await interaction.channel.send({
-                                content: `<@${userId}> has been removed from the ticket.`
+                                content: `<@${removeUserId}> has been removed from the ticket.`
                             });
                         }
                     } catch (error) {
+                        console.error('[TicketManagement] Error removing user from ticket:', error);
+                        sentryService.captureException(error as Error, {
+                            context: 'ticket_remove_user',
+                            user_id: interaction.user.id,
+                            guild_id: interaction.guildId,
+                            ticket_id: ticket._id?.toString(),
+                            target_user_id: removeUserId
+                        });
                         await interaction.reply({
                             content: `❌ Failed to remove user: ${error instanceof Error ? error.message : 'Unknown error'}`,
                             flags: 1 << 6

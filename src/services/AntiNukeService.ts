@@ -12,6 +12,7 @@ import {
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
 import { moderationService } from './ModerationService';
+import { sentryService } from './SentryService';
 
 interface ActionEvent {
     executorId: string;
@@ -110,6 +111,11 @@ export class AntiNukeService {
 
         } catch (error) {
             console.error('[AntiNuke] Error handling guild ban add:', error);
+            sentryService.captureException(error as Error, {
+                context: 'antinuke_ban_add',
+                guild_id: ban.guild.id,
+                user_id: ban.user.id
+            });
         }
     }
 
@@ -144,6 +150,11 @@ export class AntiNukeService {
 
         } catch (error) {
             console.error('[AntiNuke] Error handling guild member remove:', error);
+            sentryService.captureException(error as Error, {
+                context: 'antinuke_member_remove',
+                guild_id: member.guild.id,
+                user_id: member.user.id
+            });
         }
     }
 
@@ -180,6 +191,11 @@ export class AntiNukeService {
 
         } catch (error) {
             console.error('[AntiNuke] Error handling channel delete:', error);
+            sentryService.captureException(error as Error, {
+                context: 'antinuke_channel_delete',
+                guild_id: channel.guild?.id,
+                channel_id: channel.id
+            });
         }
     }
 
@@ -216,6 +232,11 @@ export class AntiNukeService {
 
         } catch (error) {
             console.error('[AntiNuke] Error handling channel create:', error);
+            sentryService.captureException(error as Error, {
+                context: 'antinuke_channel_create',
+                guild_id: channel.guild?.id,
+                channel_id: channel.id
+            });
         }
     }
 
@@ -250,6 +271,11 @@ export class AntiNukeService {
 
         } catch (error) {
             console.error('[AntiNuke] Error handling role delete:', error);
+            sentryService.captureException(error as Error, {
+                context: 'antinuke_role_delete',
+                guild_id: role.guild.id,
+                role_id: role.id
+            });
         }
     }
 

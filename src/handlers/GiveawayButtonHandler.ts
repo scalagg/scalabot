@@ -1,5 +1,6 @@
 import { ButtonInteraction, EmbedBuilder } from 'discord.js';
 import { giveawayService } from '../services/GiveawayService';
+import { sentryService } from '../services/SentryService';
 import { serverUtils } from '../utils/ServerUtils';
 
 export class GiveawayButtonHandler {
@@ -84,6 +85,12 @@ export class GiveawayButtonHandler {
 
         } catch (error) {
             console.error('[GiveawayButtonHandler] Error handling join:', error);
+            sentryService.captureException(error as Error, {
+                context: 'giveaway_join',
+                user_id: interaction.user.id,
+                guild_id: interaction.guildId,
+                message_id: interaction.customId.replace('giveaway_join_', '')
+            });
             await interaction.reply({
                 content: '❌ An error occurred while joining the giveaway. Please try again.',
                 ephemeral: true

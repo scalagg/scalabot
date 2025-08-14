@@ -13,6 +13,7 @@ import {
 } from 'discord.js';
 import type { OverwriteResolvable, PermissionOverwriteOptions } from 'discord.js';
 import { ticketService } from '../services/TicketService';
+import { sentryService } from '../services/SentryService';
 import { TicketCategory } from '../models/Ticket';
 import { CounterModel } from '../models/Counter';
 import { serverUtils } from '../utils/ServerUtils';
@@ -182,6 +183,15 @@ export async function handleTicketButton(interaction: ButtonInteraction) {
 
     } catch (error) {
         console.error('[TicketButton] Error handling button interaction:', error);
+        
+        // Capture error in Sentry
+        sentryService.captureException(error as Error, {
+            context: 'ticket_button',
+            user_id: interaction.user.id,
+            guild_id: interaction.guildId,
+            custom_id: interaction.customId
+        });
+        
         await interaction.reply({
             content: '❌ An error occurred while creating the ticket form. Please try again.',
             ephemeral: true

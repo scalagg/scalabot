@@ -3,6 +3,7 @@ import { mongoService } from './MongoService';
 import { Collection, ObjectId, Document } from 'mongodb';
 import { Client, TextChannel, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { serverUtils } from '../utils/ServerUtils';
+import { sentryService } from './SentryService';
 
 export class GiveawayService {
     private static instance: GiveawayService;
@@ -292,6 +293,9 @@ export class GiveawayService {
                 }
             } catch (error) {
                 console.error('[GiveawayService] Error in auto-end check:', error);
+                sentryService.captureException(error as Error, {
+                    context: 'giveaway_auto_end_check'
+                });
             }
         }, 10000); // Check every 10 seconds
     }
@@ -362,6 +366,12 @@ export class GiveawayService {
 
         } catch (error) {
             console.error(`[GiveawayService] Error auto-ending giveaway ${giveaway.messageId}:`, error);
+            sentryService.captureException(error as Error, {
+                context: 'giveaway_auto_end',
+                message_id: giveaway.messageId,
+                channel_id: giveaway.channelId,
+                guild_id: giveaway.guildId
+            });
         }
     }
 

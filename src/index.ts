@@ -51,6 +51,7 @@ import { welcomeService } from './services/WelcomeService';
 import { antiRaidService } from './services/AntiRaidService';
 import { antiNukeService } from './services/AntiNukeService';
 import { autoCooldownService } from './services/AutoCooldownService';
+import { sentryService } from './services/SentryService';
 import { data as roleMenuData, execute as roleMenuExecute } from './commands/management/rolemenu';
 
 // Create Discord client
@@ -79,6 +80,10 @@ client.once(Events.ClientReady, async (readyClient) => {
     try {
         // Initialize services in sequence
         console.log('Initializing services...');
+        
+        // 0. Initialize Sentry first for error tracking
+        sentryService.initialize();
+        console.log('Sentry initialized');
         
         // 1. Connect to MongoDB first
         await mongoService.connect();
@@ -330,6 +335,16 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     } catch (error) {
         console.error('Error handling interaction:', error);
         
+        // Capture error in Sentry
+        sentryService.captureException(error as Error, {
+            interaction_type: interaction.type,
+            interaction_id: interaction.id,
+            user_id: interaction.user?.id,
+            guild_id: interaction.guildId,
+            channel_id: interaction.channelId,
+            custom_id: (interaction as any).customId
+        });
+        
         const errorMessage = {
             content: 'An error occurred while processing your request.',
             flags: 1 << 6
@@ -518,3 +533,38 @@ client.on(Events.GuildMemberUpdate, async (oldMember: GuildMember | any, newMemb
 
 // Login to Discord
 client.login(config.token);
+
+// Handle process exit to properly close Sentry
+process.on('SIGINT', async () => {
+    console.log('Shutting down gracefully...');
+    await sentryService.close();
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('Shutting down gracefully...');
+    await sentryService.close();
+    process.exit(0);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    sentryService.captureException(error, {
+        context: 'uncaught_exception'
+    });
+    sentryService.flush(2000).then(() => {
+        process.exit(1);
+    });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    sentryService.captureException(new Error('Unhandled Rejection'), {
+        context: 'unhandled_rejection',
+        reason: reason instanceof Error ? reason.message : String(reason),
+        promise: promise.toString()
+    });
+    sentryService.flush(2000).then(() => {
+        process.exit(1);
+    });
+});

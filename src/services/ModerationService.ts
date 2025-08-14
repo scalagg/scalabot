@@ -2,6 +2,7 @@ import { GuildMember, Client, EmbedBuilder, TextChannel, User, ColorResolvable }
 import { mongoService } from './MongoService';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
+import { sentryService } from './SentryService';
 import type { Document, ObjectId } from 'mongodb';
 
 interface ModerationAction {
@@ -479,10 +480,19 @@ export class ModerationService {
                         
                     } catch (error) {
                         console.error(`[TempbanExpiry] Error processing tempban ${tempban.punishmentId}:`, error);
+                        sentryService.captureException(error as Error, {
+                            context: 'moderation_tempban_expiry',
+                            punishment_id: tempban.punishmentId,
+                            user_id: tempban.userId,
+                            guild_id: tempban.guildId
+                        });
                     }
                 }
             } catch (err) {
                 console.error('[ModerationService] Error in tempban expiry checker:', err);
+                sentryService.captureException(err as Error, {
+                    context: 'moderation_tempban_checker'
+                });
             }
         }, 60 * 1000); // Check every minute
     }
@@ -513,6 +523,11 @@ export class ModerationService {
             }
         } catch (error) {
             console.error(`[MuteExpiry] Error sending expiry log for ${mute.punishmentId}:`, error);
+            sentryService.captureException(error as Error, {
+                context: 'moderation_mute_expiry_log',
+                punishment_id: mute.punishmentId,
+                user_id: mute.userId
+            });
         }
     }
 
@@ -542,6 +557,11 @@ export class ModerationService {
             }
         } catch (error) {
             console.error(`[TempbanExpiry] Error sending expiry log for ${tempban.punishmentId}:`, error);
+            sentryService.captureException(error as Error, {
+                context: 'moderation_tempban_expiry_log',
+                punishment_id: tempban.punishmentId,
+                user_id: tempban.userId
+            });
         }
     }
 }

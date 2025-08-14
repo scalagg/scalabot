@@ -18,6 +18,7 @@ import {
 } from 'discord.js';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
+import { sentryService } from './SentryService';
 
 interface LoggingConfig {
     enabled: boolean;
@@ -117,6 +118,10 @@ export class LoggingService {
             return null;
         } catch (error) {
             console.error('[LoggingService] Error getting log channel:', error);
+            sentryService.captureException(error as Error, {
+                context: 'logging_get_channel',
+                guild_id: guild.id
+            });
             return null;
         }
     }
@@ -136,6 +141,12 @@ export class LoggingService {
             return null;
         } catch (error) {
             console.error('[LoggingService] Error fetching audit logs:', error);
+            sentryService.captureException(error as Error, {
+                context: 'logging_audit_logs',
+                guild_id: guild.id,
+                target_id: targetId,
+                action_type: actionType
+            });
             return null;
         }
     }

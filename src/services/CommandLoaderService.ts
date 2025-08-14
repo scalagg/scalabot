@@ -2,6 +2,7 @@ import { Client, Collection, REST, Routes } from 'discord.js';
 import { readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { config } from '../config/config';
+import { sentryService } from './SentryService';
 
 export class CommandLoaderService {
     private readonly client: Client;
@@ -62,6 +63,11 @@ export class CommandLoaderService {
                     }
                 } catch (error) {
                     console.error(`Error loading command from ${fullPath}:`, error);
+                    sentryService.captureException(error as Error, {
+                        context: 'command_loading',
+                        file_path: fullPath,
+                        command_name: item
+                    });
                 }
             }
         }
@@ -86,6 +92,10 @@ export class CommandLoaderService {
             });
         } catch (error) {
             console.error('Error loading commands:', error);
+            sentryService.captureException(error as Error, {
+                context: 'command_loader_init',
+                commands_path: commandsPath
+            });
             throw error;
         }
     }

@@ -17,6 +17,7 @@ import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
 import { moderationService } from './ModerationService';
 import { redisService } from './RedisService';
+import { sentryService } from './SentryService';
 
 interface JoinEvent {
     userId: string;
@@ -146,6 +147,12 @@ export class AntiRaidService {
 
         } catch (error) {
             console.error('[AntiRaid] Error handling member join:', error);
+            sentryService.captureException(error as Error, {
+                context: 'antiraid_member_join',
+                guild_id: member.guild.id,
+                user_id: member.user.id,
+                username: member.user.username
+            });
         }
     }
 

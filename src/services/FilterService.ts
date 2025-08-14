@@ -7,6 +7,7 @@ import {
 } from 'discord.js';
 import { serverUtils } from '../utils/ServerUtils';
 import { config } from '../config/config';
+import { sentryService } from './SentryService';
 
 interface FilterConfig {
     enabled: boolean;
@@ -219,6 +220,13 @@ export class FilterService {
 
         } catch (error) {
             console.error('[FilterService] Error handling violation:', error);
+            sentryService.captureException(error as Error, {
+                context: 'filter_violation',
+                guild_id: message.guild?.id,
+                user_id: message.author.id,
+                channel_id: message.channel.id,
+                violations: violations.join(', ')
+            });
         }
     }
 
@@ -245,6 +253,12 @@ export class FilterService {
             }
         } catch (error) {
             console.error('[FilterService] Error logging violation:', error);
+            sentryService.captureException(error as Error, {
+                context: 'filter_log_violation',
+                guild_id: message.guild?.id,
+                user_id: message.author.id,
+                channel_id: message.channel.id
+            });
         }
     }
 

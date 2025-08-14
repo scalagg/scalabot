@@ -10,6 +10,7 @@ import { join } from 'path';
 import { serverUtils, ServerType } from '../utils/ServerUtils';
 import { config } from '../config/config';
 import { mongoService } from './MongoService';
+import { sentryService } from './SentryService';
 import fetch from 'node-fetch';
 
 interface PlayerData {
@@ -96,6 +97,12 @@ export class WelcomeService {
 
         } catch (error) {
             console.error('[WelcomeService] Error handling member join:', error);
+            sentryService.captureException(error as Error, {
+                context: 'welcome_member_join',
+                user_id: member.id,
+                guild_id: member.guild.id,
+                server_type: serverUtils.getServerTypeFromGuildId(member.guild.id)
+            });
         }
     }
 

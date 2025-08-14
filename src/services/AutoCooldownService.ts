@@ -8,6 +8,7 @@ import {
 } from 'discord.js';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
+import { sentryService } from './SentryService';
 
 interface MessageEvent {
     userId: string;
@@ -120,6 +121,12 @@ export class AutoCooldownService {
 
         } catch (error) {
             console.error('[AutoCooldown] Error handling message:', error);
+            sentryService.captureException(error as Error, {
+                context: 'autocooldown_message',
+                guild_id: message.guild?.id,
+                user_id: message.author.id,
+                channel_id: message.channel.id
+            });
         }
     }
 
@@ -175,6 +182,12 @@ export class AutoCooldownService {
 
         } catch (error) {
             console.error('[AutoCooldown] Error handling spam:', error);
+            sentryService.captureException(error as Error, {
+                context: 'autocooldown_spam',
+                guild_id: guild.id,
+                message_count: detection.messageCount,
+                threshold: detection.threshold
+            });
         }
     }
 

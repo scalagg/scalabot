@@ -4,6 +4,7 @@ import { mongoService } from './MongoService';
 import { redisService } from './RedisService';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
+import { sentryService } from './SentryService';
 import type { Document } from 'mongodb';
 
 interface BaseDiscordProfile {
@@ -532,6 +533,11 @@ class PunishmentService {
             });
         } catch (error) {
             console.error(`[PunishmentService] Error sending status DM to ${member.user.tag}:`, error);
+            sentryService.captureException(error as Error, {
+                context: 'punishment_status_dm',
+                guild_id: member.guild.id,
+                user_id: member.user.id
+            });
         }
     }
 
@@ -587,6 +593,10 @@ class PunishmentService {
             };
         } catch (error) {
             console.error(`[PunishmentService] Error looking up punishment ${punishmentId}:`, error);
+            sentryService.captureException(error as Error, {
+                context: 'punishment_lookup',
+                punishment_id: punishmentId
+            });
             return {
                 success: false,
                 error: 'Failed to fetch punishment details from the API'

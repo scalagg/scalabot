@@ -5,6 +5,7 @@ import { mongoService } from './MongoService';
 import { TicketModel, TicketCategory, type TicketMetadata, type Ticket } from '../models/Ticket';
 import { CounterModel } from '../models/Counter';
 import { serverUtils } from '../utils/ServerUtils';
+import { sentryService } from './SentryService';
 
 interface CreateTicketParams {
     userId: string;
