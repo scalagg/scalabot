@@ -356,4 +356,6 @@ async function getNextTicketNumber(guildId: string): Promise<number> {
     );
 
     return counter.sequence;
-} 
+}
+
+ 

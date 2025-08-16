@@ -27,13 +27,34 @@ import { ObjectId } from 'mongodb';
 import { config } from '../config/config';
 import { serverUtils } from '../utils/ServerUtils';
 
+// Utility function to handle interactions with timeout
+async function handleInteractionWithTimeout<T>(
+    interaction: ButtonInteraction | StringSelectMenuInteraction,
+    operation: () => Promise<T>,
+    timeoutMs: number = 25000
+): Promise<T> {
+    return Promise.race([
+        operation(),
+        new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Operation timed out')), timeoutMs)
+        )
+    ]);
+}
+
 export async function handleTicketManagement(interaction: ButtonInteraction | StringSelectMenuInteraction) {
     try {
-        const ticket = await ticketService.getTicketByChannel(interaction.channel!.id);
+        // Defer reply immediately to prevent interaction timeout
+        await interaction.deferReply({ ephemeral: true });
+        
+        const ticket = await handleInteractionWithTimeout(
+            interaction,
+            () => ticketService.getTicketByChannel(interaction.channel!.id),
+            10000
+        );
+        
         if (!ticket) {
-            await interaction.reply({ 
-                content: '❌ Ticket not found', 
-                flags: 1 << 6 
+            await interaction.editReply({ 
+                content: '❌ Ticket not found'
             });
             return;
         }
@@ -41,13 +62,39 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
         // Set server type based on guild ID
         serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
 
-        // Check if user has staff role
-        if (!(interaction.member instanceof GuildMember) || !serverUtils.hasStaffRole(interaction.member)) {
-            await interaction.reply({
-                content: '❌ You do not have permission to manage tickets',
-                flags: 1 << 6
+        // Check if user has permission to interact with this ticket
+        if (!(interaction.member instanceof GuildMember)) {
+            await interaction.editReply({
+                content: '❌ You do not have permission to manage tickets'
             });
             return;
+        }
+
+        // For ticket close, allow anyone in the ticket (ticket creator or staff)
+        // For other operations, require staff role
+        const isCloseOperation = interaction.customId === 'ticket_close' || 
+                                interaction.customId.startsWith('ticket_close_') ||
+                                interaction.customId.startsWith('ticket_rate_');
+        
+        if (!isCloseOperation && !serverUtils.hasStaffRole(interaction.member)) {
+            await interaction.editReply({
+                content: '❌ You do not have permission to manage tickets'
+            });
+            return;
+        }
+
+        // For close operations, check if user is in the ticket
+        if (isCloseOperation) {
+            const hasStaffRole = serverUtils.hasStaffRole(interaction.member);
+            const isTicketCreator = ticket.userId === interaction.user.id;
+            
+            // Allow if user is staff or ticket creator
+            if (!hasStaffRole && !isTicketCreator) {
+                await interaction.editReply({
+                    content: '❌ Only staff members or the ticket creator can close tickets'
+                });
+                return;
+            }
         }
 
         // Handle select menu interactions
@@ -56,12 +103,15 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                 case 'ticket_add_user_select':
                     const addUserId = interaction.values[0];
                     try {
-                        await ticketService.addUserToTicket(ticket._id!, addUserId);
+                        await handleInteractionWithTimeout(
+                            interaction,
+                            () => ticketService.addUserToTicket(ticket._id!, addUserId),
+                            15000
+                        );
 
                         // Send ephemeral confirmation
-                        await interaction.reply({
-                            content: 'The user was successfully added to the ticket.',
-                            flags: 1 << 6
+                        await interaction.editReply({
+                            content: 'The user was successfully added to the ticket.'
                         });
 
                         // Send public announcement
@@ -72,16 +122,19 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                         }
                     } catch (error) {
                         console.error('[TicketManagement] Error adding user to ticket:', error);
-                        sentryService.captureException(error as Error, {
-                            context: 'ticket_add_user',
-                            user_id: interaction.user.id,
-                            guild_id: interaction.guildId,
-                            ticket_id: ticket._id?.toString(),
-                            target_user_id: addUserId
-                        });
-                        await interaction.reply({
-                            content: `❌ Failed to add user: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                            flags: 1 << 6
+                        try {
+                            sentryService.captureException(error as Error, {
+                                context: 'ticket_add_user',
+                                user_id: interaction.user.id,
+                                guild_id: interaction.guildId,
+                                ticket_id: ticket._id?.toString(),
+                                target_user_id: addUserId
+                            });
+                        } catch (sentryError) {
+                            console.error('Failed to capture error in Sentry:', sentryError);
+                        }
+                        await interaction.editReply({
+                            content: `❌ Failed to add user: ${error instanceof Error ? error.message : 'Unknown error'}`
                         });
                     }
                     return;
@@ -89,12 +142,15 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                 case 'ticket_remove_user_select':
                     const removeUserId = interaction.values[0];
                     try {
-                        await ticketService.removeUserFromTicket(ticket._id!, removeUserId);
+                        await handleInteractionWithTimeout(
+                            interaction,
+                            () => ticketService.removeUserFromTicket(ticket._id!, removeUserId),
+                            15000
+                        );
 
                         // Send ephemeral confirmation
-                        await interaction.reply({
-                            content: 'The user was successfully removed from the ticket.',
-                            flags: 1 << 6
+                        await interaction.editReply({
+                            content: 'The user was successfully removed from the ticket.'
                         });
 
                         // Send public announcement
@@ -105,16 +161,19 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                         }
                     } catch (error) {
                         console.error('[TicketManagement] Error removing user from ticket:', error);
-                        sentryService.captureException(error as Error, {
-                            context: 'ticket_remove_user',
-                            user_id: interaction.user.id,
-                            guild_id: interaction.guildId,
-                            ticket_id: ticket._id?.toString(),
-                            target_user_id: removeUserId
-                        });
-                        await interaction.reply({
-                            content: `❌ Failed to remove user: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                            flags: 1 << 6
+                        try {
+                            sentryService.captureException(error as Error, {
+                                context: 'ticket_remove_user',
+                                user_id: interaction.user.id,
+                                guild_id: interaction.guildId,
+                                ticket_id: ticket._id?.toString(),
+                                target_user_id: removeUserId
+                            });
+                        } catch (sentryError) {
+                            console.error('Failed to capture error in Sentry:', sentryError);
+                        }
+                        await interaction.editReply({
+                            content: `❌ Failed to remove user: ${error instanceof Error ? error.message : 'Unknown error'}`
                         });
                     }
                     return;
@@ -128,9 +187,8 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                 if (ticket.claimedBy) {
                     // If claimed by someone else, only managers can take over
                     if (ticket.claimedBy !== interaction.user.id && !serverUtils.hasManagerRole(interaction.member)) {
-                        await interaction.reply({
-                            content: '❌ This ticket is already claimed by someone else',
-                            flags: 1 << 6
+                        await interaction.editReply({
+                            content: '❌ This ticket is already claimed by someone else'
                         });
                         return;
                     }
@@ -142,7 +200,7 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                             .setDescription(`🔓 <@${interaction.user.id}> has unclaimed this ticket.`)
                             .setFooter(serverUtils.getFooter());
 
-                        await interaction.reply({
+                        await interaction.editReply({
                             embeds: [unclaimEmbed]
                         });
                         return;
@@ -158,7 +216,7 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                     .setFooter(serverUtils.getFooter());
 
                     // ping ticket creator and send claim embed
-                await interaction.reply({
+                await interaction.editReply({
                     embeds: [claimEmbed],
                     content: `<@${ticket.userId}>`
                 });
@@ -194,10 +252,9 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                         "❌ Closing without rating will close the ticket immediately."))
                     .setFooter(serverUtils.getFooter());
 
-                await interaction.reply({
+                await interaction.editReply({
                     embeds: [warningEmbed],
-                    components: [closeRow],
-                    flags: 1 << 6
+                    components: [closeRow]
                 });
                 break;
 
@@ -205,9 +262,8 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                 // Check if user has permission to manage users
                 if (!serverUtils.hasAdminOrHigherRole(interaction.member) && 
                     ticket.claimedBy !== interaction.user.id) {
-                    await interaction.reply({
-                        content: '❌ Only the staff member who claimed the ticket or administrators can manage users',
-                        flags: 1 << 6
+                    await interaction.editReply({
+                        content: '❌ Only the staff member who claimed the ticket or administrators can manage users'
                     });
                     return;
                 }
@@ -232,10 +288,9 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                             .setStyle(ButtonStyle.Danger)
                     );
 
-                await interaction.reply({
+                await interaction.editReply({
                     embeds: [manageUsersEmbed],
-                    components: [manageRow],
-                    flags: 1 << 6
+                    components: [manageRow]
                 });
                 break;
 
@@ -264,10 +319,9 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                 const availableUsers = await ticketService.getAvailableUsersForTicket(interaction.guildId!, ticket);
                 
                 if (availableUsers.length === 0) {
-                    await interaction.reply({
-                        content: '❌ No users available to remove from this ticket.',
-                        flags: 1 << 6
-                    });
+                                    await interaction.editReply({
+                    content: '❌ No users available to remove from this ticket.'
+                });
                     return;
                 }
 
@@ -285,20 +339,36 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                 const removeUserRow = new ActionRowBuilder<StringSelectMenuBuilder>()
                     .addComponents(removeUserSelect);
 
-                await interaction.reply({
+                await interaction.editReply({
                     content: 'Select a user to remove from the ticket:',
-                    components: [removeUserRow],
-                    flags: 1 << 6
+                    components: [removeUserRow]
                 });
                 break;
         }
 
     } catch (error) {
         console.error('[TicketManagement] Error handling interaction:', error);
-        await interaction.reply({
-            content: '❌ An error occurred while processing your request.',
-            flags: 1 << 6
-        });
+        
+        // Check if interaction has already been replied to
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: '❌ An error occurred while processing your request.',
+                    flags: 1 << 6
+                });
+            } else if (interaction.deferred) {
+                await interaction.editReply({
+                    content: '❌ An error occurred while processing your request.'
+                });
+            } else {
+                await interaction.followUp({
+                    content: '❌ An error occurred while processing your request.',
+                    flags: 1 << 6
+                });
+            }
+        } catch (replyError) {
+            console.error('[TicketManagement] Failed to send error reply:', replyError);
+        }
     }
 }
 
@@ -404,10 +474,27 @@ export async function handleCloseConfirmation(interaction: ButtonInteraction) {
         }
     } catch (error) {
         console.error('[ERROR] Close confirmation error:', error);
-        await interaction.reply({ 
-            content: '❌ An error occurred', 
-            flags: 1 << 6 
-        });
+        
+        // Check if interaction has already been replied to
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ 
+                    content: '❌ An error occurred', 
+                    flags: 1 << 6 
+                });
+            } else if (interaction.deferred) {
+                await interaction.editReply({ 
+                    content: '❌ An error occurred'
+                });
+            } else {
+                await interaction.followUp({ 
+                    content: '❌ An error occurred', 
+                    flags: 1 << 6 
+                });
+            }
+        } catch (replyError) {
+            console.error('[TicketManagement] Failed to send error reply:', replyError);
+        }
     }
 }
 
@@ -459,10 +546,27 @@ export async function handleRating(interaction: ButtonInteraction) {
 
     } catch (error) {
         console.error('[ERROR]', error);
-        await interaction.reply({ 
-            content: '❌ An error occurred', 
-            flags: 1 << 6 
-        });
+        
+        // Check if interaction has already been replied to
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ 
+                    content: '❌ An error occurred', 
+                    flags: 1 << 6 
+                });
+            } else if (interaction.deferred) {
+                await interaction.editReply({ 
+                    content: '❌ An error occurred'
+                });
+            } else {
+                await interaction.followUp({ 
+                    content: '❌ An error occurred', 
+                    flags: 1 << 6 
+                });
+            }
+        } catch (replyError) {
+            console.error('[TicketManagement] Failed to send error reply:', replyError);
+        }
     }
 }
 

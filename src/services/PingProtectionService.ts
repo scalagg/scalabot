@@ -29,7 +29,7 @@ export class PingProtectionService {
         this.config = {
             enabled: true,
             protectedRoles: [], // Will be populated from ServerUtils
-            warningMessage: "⚠️ **Please do not ping administrators or managers.**\n\nIf you need assistance, please:\n• Create a ticket\n• Wait for staff to respond\n\n**Repeated pinging may result in moderation action.**",
+            warningMessage: "⚠️ **Only staff members can ping administrators or managers.**\n\nIf you need assistance, please:\n• Create a ticket\n• Wait for staff to respond\n• Contact a staff member directly\n\n**Repeated pinging may result in moderation action.**",
             deleteMessages: true,
             logViolations: true,
             whitelistedChannels: [],
@@ -98,13 +98,14 @@ export class PingProtectionService {
             return;
         }
 
-        // Check if user has admin/manager role (they can ping each other)
+        // Check if user has admin/manager role (only staff can ping protected roles)
         if (message.member) {
             const hasAdminRole = serverUtils.hasAdminRole(message.member);
             const hasManagerRole = serverUtils.hasManagerRole(message.member);
             
+            // Only staff members (admin/manager roles) can ping protected roles
             if (hasAdminRole || hasManagerRole) {
-                return;
+                return; // Allow staff to ping protected roles
             }
         }
 
@@ -168,7 +169,7 @@ export class PingProtectionService {
             // Create warning embed
             const warningEmbed = new EmbedBuilder()
                 .setColor(serverUtils.getColor('warning'))
-                .setTitle('⚠️ Ping Protection')
+                .setTitle('⚠️ Staff-Only Ping Restriction')
                 .setDescription(this.config.warningMessage)
                 .addFields(
                     { 
@@ -202,7 +203,7 @@ export class PingProtectionService {
             try {
                 const dmEmbed = new EmbedBuilder()
                     .setColor(serverUtils.getColor('warning'))
-                    .setTitle('⚠️ Ping Protection Warning')
+                    .setTitle('⚠️ Staff-Only Ping Restriction')
                     .setDescription(this.config.warningMessage)
                     .addFields(
                         { 

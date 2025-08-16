@@ -267,18 +267,18 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
                     return;
                 }
                 // Get the hardcoded roles for this guild
-                const roles = roleMenuService.getRolesForGuild(interaction.guild.id);
+                const roles = roleMenuService.getRolesForGuild(interaction.guild!.id);
                 // Find the actual GuildRole objects for these names
-                const roleMap = new Map(roles.map(r => [r.name, interaction.guild.roles.cache.find(gr => gr.name === r.name)]));
+                const roleMap = new Map(roles.map(r => [r.name, interaction.guild!.roles.cache.find(gr => gr.name === r.name)]));
                 // Roles the user selected
                 const selected = new Set(interaction.values);
                 // Roles to add: selected and not already present
-                const toAdd = Array.from(selected).map(name => roleMap.get(name)).filter(r => r && !member.roles.cache.has(r.id));
+                const toAdd = Array.from(selected).map(name => roleMap.get(name)).filter((r): r is any => r && !member.roles.cache.has(r.id));
                 // Roles to remove: in menu, not selected, and currently present
                 const toRemove = roles
                     .filter(r => !selected.has(r.name))
                     .map(r => roleMap.get(r.name))
-                    .filter(r => r && member.roles.cache.has(r.id));
+                    .filter((r): r is any => r && member.roles.cache.has(r.id));
                 // Add and remove roles
                 await member.roles.add(toAdd);
                 await member.roles.remove(toRemove);
@@ -356,25 +356,46 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     } catch (error) {
         console.error('Error handling interaction:', error);
         
-        // Capture error in Sentry
-        sentryService.captureException(error as Error, {
-            interaction_type: interaction.type,
-            interaction_id: interaction.id,
-            user_id: interaction.user?.id,
-            guild_id: interaction.guildId,
-            channel_id: interaction.channelId,
-            custom_id: (interaction as any).customId
-        });
+        // Check if it's an "Unknown interaction" error (interaction expired)
+        if (error instanceof Error && error.message.includes('Unknown interaction')) {
+            console.log('Interaction expired, skipping error handling');
+            return;
+        }
         
-        const errorMessage = {
-            content: 'An error occurred while processing your request.',
-            flags: 1 << 6
-        };
+        // Capture error in Sentry (only if initialized)
+        try {
+            sentryService.captureException(error as Error, {
+                interaction_type: interaction.type,
+                interaction_id: interaction.id,
+                user_id: interaction.user?.id,
+                guild_id: interaction.guildId,
+                channel_id: interaction.channelId,
+                custom_id: (interaction as any).customId
+            });
+        } catch (sentryError) {
+            console.error('Failed to capture error in Sentry:', sentryError);
+        }
+        
+        // Try to reply to the interaction if it's still valid
+        try {
+            const errorMessage = {
+                content: 'An error occurred while processing your request.',
+                flags: 1 << 6
+            };
 
-        if (interaction.isRepliable() && !interaction.replied) {
-            await interaction.reply(errorMessage);
-        } else if (interaction.isRepliable()) {
-            await interaction.followUp(errorMessage);
+            // Cast to appropriate interaction type for reply methods
+            const replyableInteraction = interaction as any;
+            
+            // Handle different interaction states
+            if (replyableInteraction.deferred) {
+                await replyableInteraction.editReply(errorMessage);
+            } else if (!replyableInteraction.replied) {
+                await replyableInteraction.reply(errorMessage);
+            } else {
+                await replyableInteraction.followUp(errorMessage);
+            }
+        } catch (replyError) {
+            console.error('Failed to send error reply:', replyError);
         }
     }
 });
@@ -577,22 +598,46 @@ process.on('SIGTERM', async () => {
 
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
-    sentryService.captureException(error, {
-        context: 'uncaught_exception'
-    });
-    sentryService.flush(2000).then(() => {
+    
+    // Check if it's an "Unknown interaction" error (interaction expired)
+    if (error instanceof Error && error.message.includes('Unknown interaction')) {
+        console.log('Interaction expired, ignoring uncaught exception');
+        return;
+    }
+    
+    try {
+        sentryService.captureException(error, {
+            context: 'uncaught_exception'
+        });
+        sentryService.flush(2000).then(() => {
+            process.exit(1);
+        });
+    } catch (sentryError) {
+        console.error('Failed to capture error in Sentry:', sentryError);
         process.exit(1);
-    });
+    }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    sentryService.captureException(new Error('Unhandled Rejection'), {
-        context: 'unhandled_rejection',
-        reason: reason instanceof Error ? reason.message : String(reason),
-        promise: promise.toString()
-    });
-    sentryService.flush(2000).then(() => {
+    
+    // Check if it's an "Unknown interaction" error
+    if (reason instanceof Error && reason.message.includes('Unknown interaction')) {
+        console.log('Interaction expired, ignoring unhandled rejection');
+        return;
+    }
+    
+    try {
+        sentryService.captureException(new Error('Unhandled Rejection'), {
+            context: 'unhandled_rejection',
+            reason: reason instanceof Error ? reason.message : String(reason),
+            promise: promise.toString()
+        });
+        sentryService.flush(2000).then(() => {
+            process.exit(1);
+        });
+    } catch (sentryError) {
+        console.error('Failed to capture error in Sentry:', sentryError);
         process.exit(1);
-    });
+    }
 });
