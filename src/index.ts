@@ -29,6 +29,10 @@ import {
     handleRating,
     handleAddUserModal
 } from './handlers/TicketManagementHandler';
+import { 
+    handleTicketTransfer,
+    handleTransferButton
+} from './handlers/TicketTransferHandler';
 import { mongoService } from './services/MongoService';
 import { ticketService } from './services/TicketService';
 import { transcriptService } from './services/TranscriptService';
@@ -227,6 +231,10 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             else if (buttonInteraction.customId.startsWith('ticket_rate_')) {
                 await handleRating(buttonInteraction);
             }
+            // Handle transfer-related buttons
+            else if (buttonInteraction.customId.startsWith('transfer_')) {
+                await handleTransferButton(buttonInteraction);
+            }
             // Handle other ticket-related buttons
             else if (buttonInteraction.customId.startsWith('ticket_')) {
                 await handleTicketManagement(buttonInteraction);
@@ -303,6 +311,10 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             else if (interaction.customId.startsWith('history_')) {
                 const { handleHistorySelect } = await import('./commands/moderation/history');
                 await handleHistorySelect(interaction);
+            }
+            // Handle transfer-related select menus
+            else if (interaction.customId.startsWith('transfer_')) {
+                await handleTicketTransfer(interaction);
             }
             // Handle ticket-related select menus
             else if (interaction.customId.startsWith('ticket_')) {

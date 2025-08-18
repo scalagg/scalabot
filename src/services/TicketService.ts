@@ -805,6 +805,132 @@ export class TicketService {
         const counter = await CounterModel.findOne({ _id: `ticket_${guildId}` });
         return counter?.sequence || 0;
     }
+
+    async assignStaffToTicket(ticketId: ObjectId, staffIds: string[]): Promise<void> {
+        this.checkInitialized();
+        
+        const ticket = await TicketModel.findById(ticketId);
+        if (!ticket) {
+            throw new Error('Ticket not found');
+        }
+
+        // Validate that all staff members exist and have staff roles
+        const guild = await this.client.guilds.fetch(ticket.guildId);
+        for (const staffId of staffIds) {
+            const member = await guild.members.fetch(staffId);
+            if (!serverUtils.hasStaffRole(member)) {
+                throw new Error(`User ${member.user.tag} is not a staff member`);
+            }
+        }
+
+        // Update the ticket with assigned staff
+        await TicketModel.updateOne(
+            { _id: ticketId },
+            { 
+                $set: { assignedStaff: staffIds },
+                $currentDate: { updatedAt: true }
+            }
+        );
+
+        // Add channel permissions for assigned staff
+        const channel = await this.client.channels.fetch(ticket.channelId) as TextChannel;
+        if (channel) {
+            for (const staffId of staffIds) {
+                await channel.permissionOverwrites.edit(staffId, {
+                    ViewChannel: true,
+                    SendMessages: true,
+                    ReadMessageHistory: true
+                });
+            }
+        }
+
+        console.log(`[TicketService] Assigned ${staffIds.length} staff members to ticket ${ticket.ticketNumber}`);
+    }
+
+    async transferTicketCategory(ticketId: ObjectId, newCategory: TicketCategory, transferredBy: string, reason?: string): Promise<void> {
+        this.checkInitialized();
+        
+        const ticket = await TicketModel.findById(ticketId);
+        if (!ticket) {
+            throw new Error('Ticket not found');
+        }
+
+        const oldCategory = ticket.category;
+        
+        // Update the ticket category and add to transfer history
+        await TicketModel.updateOne(
+            { _id: ticketId },
+            { 
+                $set: { 
+                    category: newCategory,
+                    updatedAt: new Date()
+                },
+                $push: {
+                    transferHistory: {
+                        fromCategory: oldCategory,
+                        toCategory: newCategory,
+                        transferredBy: transferredBy,
+                        transferredAt: new Date(),
+                        reason: reason
+                    }
+                }
+            }
+        );
+
+        // Update channel name to reflect new category
+        const channel = await this.client.channels.fetch(ticket.channelId) as TextChannel;
+        if (channel) {
+            const { getCategoryChannelPrefix } = await import('../models/Ticket');
+            const newPrefix = getCategoryChannelPrefix(newCategory);
+            const newChannelName = `${newPrefix}-${ticket.ticketNumber}`;
+            
+            await channel.setName(newChannelName, `Category transfer from ${oldCategory} to ${newCategory}`);
+        }
+
+        console.log(`[TicketService] Transferred ticket ${ticket.ticketNumber} from ${oldCategory} to ${newCategory}`);
+    }
+
+    async getTicketTransferHistory(ticketId: ObjectId): Promise<any[]> {
+        const ticket = await TicketModel.findById(ticketId);
+        if (!ticket) {
+            throw new Error('Ticket not found');
+        }
+        return ticket.transferHistory || [];
+    }
+
+    async getTicketsByAssignedStaff(staffId: string, guildId: string): Promise<Ticket[]> {
+        return await TicketModel.find({
+            guildId: guildId,
+            assignedStaff: staffId,
+            status: 'OPEN'
+        }).sort({ updatedAt: -1 });
+    }
+
+    async removeStaffFromTicket(ticketId: ObjectId, staffId: string): Promise<void> {
+        this.checkInitialized();
+        
+        const ticket = await TicketModel.findById(ticketId);
+        if (!ticket) {
+            throw new Error('Ticket not found');
+        }
+
+        // Remove staff from assigned list
+        await TicketModel.updateOne(
+            { _id: ticketId },
+            { 
+                $pull: { assignedStaff: staffId },
+                $currentDate: { updatedAt: true }
+            }
+        );
+
+        // Remove channel permissions for the staff member
+        const channel = await this.client.channels.fetch(ticket.channelId) as TextChannel;
+        if (channel) {
+            await channel.permissionOverwrites.delete(staffId);
+        }
+
+        console.log(`[TicketService] Removed staff member ${staffId} from ticket ${ticket.ticketNumber}`);
+    }
 }
 
 export const ticketService = TicketService.getInstance(); 

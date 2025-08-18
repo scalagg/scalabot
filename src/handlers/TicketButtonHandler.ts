@@ -305,13 +305,28 @@ export async function createTicketChannel(
                 .setStyle(ButtonStyle.Secondary)
         );
 
+    // Create transfer management row
+    const transferRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('transfer_view_history')
+                .setLabel('Transfer History')
+                .setEmoji('📋')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('ticket_transfer_quick')
+                .setLabel('Quick Transfer')
+                .setEmoji('🔄')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
     // Create ping message for staff and user
     const pingMessage = `🎫 **New Ticket Created!**\n\n👤 **User:** <@${interaction.user.id}>\n👥 **Staff Team:** @everyone\n\nPlease respond to this ticket as soon as possible.`;
 
     await channel.send({
         content: pingMessage,
         embeds: [embed],
-        components: [managementRow]
+        components: [managementRow, transferRow]
     });
 
     await interaction.reply({

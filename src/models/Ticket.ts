@@ -129,6 +129,14 @@ export interface Ticket {
     createdAt: Date;
     updatedAt: Date;
     additionalUsers: string[];
+    assignedStaff: string[]; // Array of staff member IDs assigned to this ticket
+    transferHistory: {
+        fromCategory: TicketCategory;
+        toCategory: TicketCategory;
+        transferredBy: string;
+        transferredAt: Date;
+        reason?: string;
+    }[];
     metadata: TicketMetadata;
 }
 
@@ -152,6 +160,14 @@ const ticketSchema = new Schema<Ticket>({
     createdAt: { type: Date, default: Date.now },
     updatedAt: Date,
     additionalUsers: [String],
+    assignedStaff: { type: [String], default: [] }, // Array of staff member IDs
+    transferHistory: [{
+        fromCategory: { type: String, enum: Object.values(TicketCategory), required: true },
+        toCategory: { type: String, enum: Object.values(TicketCategory), required: true },
+        transferredBy: { type: String, required: true },
+        transferredAt: { type: Date, default: Date.now },
+        reason: String
+    }],
     metadata: { type: Schema.Types.Mixed, required: true }
 });
 

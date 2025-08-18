@@ -344,6 +344,82 @@ export async function handleTicketManagement(interaction: ButtonInteraction | St
                     components: [removeUserRow]
                 });
                 break;
+
+            case 'ticket_transfer_quick':
+                // Create quick transfer category selection
+                const quickTransferSelect = new StringSelectMenuBuilder()
+                    .setCustomId('transfer_category_select')
+                    .setPlaceholder('Select new category for this ticket')
+                    .addOptions(
+                        {
+                            label: 'Staff Application',
+                            description: 'Transfer to staff application category',
+                            value: 'STAFF_APPLICATION',
+                            emoji: '👑'
+                        },
+                        {
+                            label: 'Media Application',
+                            description: 'Transfer to media application category',
+                            value: 'MEDIA_APPLICATION',
+                            emoji: '📸'
+                        },
+                        {
+                            label: 'Punishment Appeal',
+                            description: 'Transfer to punishment appeal category',
+                            value: 'PUNISHMENT_APPEAL',
+                            emoji: '⚖️'
+                        },
+                        {
+                            label: 'Bug Report',
+                            description: 'Transfer to bug report category',
+                            value: 'BUG_REPORT',
+                            emoji: '🐛'
+                        },
+                        {
+                            label: 'Tebex Support',
+                            description: 'Transfer to Tebex support category',
+                            value: 'TEBEX_SUPPORT',
+                            emoji: '🛒'
+                        },
+                        {
+                            label: 'Head Staff Support',
+                            description: 'Transfer to head staff support category',
+                            value: 'HEAD_STAFF_SUPPORT',
+                            emoji: '👨‍💼'
+                        },
+                        {
+                            label: 'General Support',
+                            description: 'Transfer to general support category',
+                            value: 'GENERAL_SUPPORT',
+                            emoji: '🌐'
+                        },
+                        {
+                            label: 'Other',
+                            description: 'Transfer to other category',
+                            value: 'OTHER',
+                            emoji: '❓'
+                        }
+                    );
+
+                const quickTransferRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+                    .addComponents(quickTransferSelect);
+
+                const quickTransferEmbed = new EmbedBuilder()
+                    .setColor(serverUtils.getColor('info'))
+                    .setTitle('🔄 Quick Transfer')
+                    .setDescription(`Current category: **${ticket.category}**\n\nSelect the new category for this ticket.`)
+                    .addFields(
+                        { name: '📝 Ticket', value: `#${ticket.ticketNumber}`, inline: true },
+                        { name: '👤 Creator', value: `<@${ticket.userId}>`, inline: true }
+                    )
+                    .setTimestamp()
+                    .setFooter(serverUtils.getFooter());
+
+                await interaction.editReply({
+                    embeds: [quickTransferEmbed],
+                    components: [quickTransferRow]
+                });
+                break;
         }
 
     } catch (error) {
