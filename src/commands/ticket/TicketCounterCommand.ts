@@ -10,7 +10,7 @@ import { serverUtils } from '../../utils/ServerUtils';
 export const data = new SlashCommandBuilder()
     .setName('ticketcounter')
     .setDescription('Manage the ticket counter (Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    )
     .addSubcommand(subcommand =>
         subcommand
             .setName('view')
@@ -45,6 +45,15 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     // Set server type based on guild ID
     serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
+
+    // Check if user has admin permission
+    if (!(interaction.member instanceof GuildMember) || !serverUtils.hasAdminRole(interaction.member)) {
+        await interaction.reply({
+            content: '❌ You do not have permission to use this command. Admin role required.',
+            ephemeral: true
+        });
+        return;
+    }
 
     const subcommand = interaction.options.getSubcommand();
 

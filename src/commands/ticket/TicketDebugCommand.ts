@@ -38,7 +38,7 @@ export const data = new SlashCommandBuilder()
             .setName('list')
             .setDescription('List all open tickets')
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {

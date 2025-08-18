@@ -36,8 +36,7 @@ export const data = new SlashCommandBuilder()
             .setName('appealable')
             .setDescription('Whether this kick can be appealed')
             .setRequired(false)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {
@@ -51,10 +50,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     // Set server type based on guild ID
     serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
 
-    // Check if user has permission to kick
-    if (!(interaction.member instanceof GuildMember) || !serverUtils.hasAdminRole(interaction.member)) {
+    // Check if user has permission to kick (requires admin role)
+    if (!(interaction.member instanceof GuildMember) || !serverUtils.hasStaffRole(interaction.member)) {
         await interaction.reply({
-            content: '❌ You do not have permission to use this command.',
+            content: '❌ You do not have permission to use this command. This action requires admin privileges.',
             ephemeral: true
         });
         return;

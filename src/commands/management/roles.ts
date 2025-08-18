@@ -16,7 +16,7 @@ export const data = new SlashCommandBuilder()
             .setDescription('The user to check roles for')
             .setRequired(false)
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {

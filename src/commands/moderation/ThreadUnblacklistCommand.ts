@@ -12,7 +12,7 @@ export const data = new SlashCommandBuilder()
         option.setName('reason')
             .setDescription('Reason for removing the user from the thread blacklist')
             .setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     try {

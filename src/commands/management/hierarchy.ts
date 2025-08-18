@@ -10,7 +10,7 @@ import { serverUtils } from '../../utils/ServerUtils';
 export const data = new SlashCommandBuilder()
     .setName('hierarchy')
     .setDescription('View the staff role hierarchy')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {

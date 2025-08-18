@@ -5,7 +5,7 @@ import { serverUtils } from '../../utils/ServerUtils';
 export const data = new SlashCommandBuilder()
     .setName('rolemenu')
     .setDescription('Post the server role menu (hardcoded, per guild)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {

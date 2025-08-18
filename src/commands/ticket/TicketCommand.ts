@@ -25,26 +25,12 @@ const STAFF_ROLES = [
     'Owner'
 ];
 
-const ADMIN_ROLES = [
-    'Admin',
-    'Senior Admin',
-    'System Admin',
-    'Platform Admin',
-    'Co-Owner',
-    'Owner'
-];
 
-const MANAGER_ROLES = [
-    'Platform Admin',
-    'System Admin',
-    'Co-Owner',
-    'Owner'
-];
 
 export const data = new SlashCommandBuilder()
     .setName('ticket')
     .setDescription('Setup the ticket system')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild) return;
@@ -58,6 +44,15 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     // Set server type based on guild ID
     serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
+
+    // Check if user has admin permission
+    if (!(interaction.member instanceof GuildMember) || !serverUtils.hasAdminRole(interaction.member)) {
+        await interaction.reply({
+            content: '❌ You do not have permission to use this command. Admin role required.',
+            ephemeral: true
+        });
+        return;
+    }
 
     const embed = new EmbedBuilder()
         .setColor(serverUtils.getColor('primary'))

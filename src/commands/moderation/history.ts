@@ -53,7 +53,7 @@ export const data = new SlashCommandBuilder()
             .setDescription('The user to check history for')
             .setRequired(true)
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {
@@ -67,10 +67,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     // Set server type based on guild ID
     serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId!));
 
-    // Check if user has permission to view history
+    // Check if user has permission to view history (requires staff role)
     if (!(interaction.member instanceof GuildMember) || !serverUtils.hasStaffRole(interaction.member)) {
         await interaction.reply({
-            content: '❌ You do not have permission to use this command.',
+            content: '❌ You do not have permission to use this command. This action requires staff privileges.',
             ephemeral: true
         });
         return;

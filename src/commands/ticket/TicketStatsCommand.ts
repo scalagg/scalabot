@@ -8,12 +8,7 @@ import {
 import { ticketService } from '../../services/TicketService';
 import { serverUtils } from '../../utils/ServerUtils';
 
-const MANAGER_ROLES = [
-    'Platform Admin',
-    'System Admin',
-    'Co-Owner',
-    'Owner'
-];
+
 
 export const data = new SlashCommandBuilder()
     .setName('ticketstats')
@@ -24,7 +19,7 @@ export const data = new SlashCommandBuilder()
             .setDescription('The staff member to view stats for')
             .setRequired(true)
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) return;
@@ -32,13 +27,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     // Set server type based on guild ID
     serverUtils.setServerType(serverUtils.getServerTypeFromGuildId(interaction.guildId));
 
-    // Check if user has manager role
-    const member = interaction.member as GuildMember;
-    const hasManagerRole = member.roles.cache.some(role => MANAGER_ROLES.includes(role.name));
-
-    if (!hasManagerRole) {
+    // Check if user has admin permission
+    if (!(interaction.member instanceof GuildMember) || !serverUtils.hasAdminRole(interaction.member)) {
         await interaction.reply({
-            content: '❌ Only managers can use this command.',
+            content: '❌ You do not have permission to use this command. Admin role required.',
             ephemeral: true
         });
         return;

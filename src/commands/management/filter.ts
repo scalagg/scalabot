@@ -99,7 +99,7 @@ export const data = new SlashCommandBuilder()
                     .setRequired(true)
             )
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {

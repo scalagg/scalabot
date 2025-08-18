@@ -33,7 +33,7 @@ export const data = new SlashCommandBuilder()
             .setName('disable')
             .setDescription('Manually disable chat cooldown')
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {

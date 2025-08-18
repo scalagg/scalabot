@@ -54,7 +54,7 @@ export const data = new SlashCommandBuilder()
                     .setMaxLength(500)
             )
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+    );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.member) {
